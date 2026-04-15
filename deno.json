@@ -1,0 +1,23 @@
+{
+  "name": "@ursamu/mushcode",
+  "version": "0.3.0",
+  "description": "Parser, evaluator, linter, printer, and analyzer for MUX/RhostMUSH softcode.",
+  "license": "MIT",
+  "exports": {
+    ".":           "./mod.ts",
+    "./parse":     "./parser/mod.ts",
+    "./traverse":  "./src/traverse/mod.ts",
+    "./print":     "./src/print/mod.ts",
+    "./lint":      "./src/lint/mod.ts",
+    "./analyze":   "./src/analyze/mod.ts",
+    "./eval":      "./src/eval/mod.ts"
+  },
+  "tasks": {
+    "test":  "deno test --allow-read tests/",
+    "build": "npx peggy --format es --allowed-start-rules Start,LockExpr -o parser/mux-softcode.mjs grammar/mux-softcode.pegjs && npx peggy --allowed-start-rules Start,LockExpr -o parser/mux-softcode.js grammar/mux-softcode.pegjs"
+  },
+  "imports": {
+    "@std/assert":  "jsr:@std/assert@^1",
+    "@std/testing": "jsr:@std/testing@^1"
+  }
+}
