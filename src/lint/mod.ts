@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Static analysis for softcode: `lint()` runs built-in rules and returns
+ * `Diagnostic` findings with severity, rule ID, and the offending AST node.
+ */
 import type { ASTNode }                from "../../parser/mod.ts";
 import { walk }                         from "../traverse/walk.ts";
 import { checkMissingWildcard }         from "./rules/missing_wildcard.ts";
@@ -14,7 +19,9 @@ export type Severity = "error" | "warning" | "info";
 export interface Diagnostic {
   /** Identifier for the rule that produced this diagnostic. */
   rule:     string;
+  /** How serious the finding is. */
   severity: Severity;
+  /** Human-readable description of the issue. */
   message:  string;
   /** The AST node most closely associated with the issue. */
   node:     ASTNode;

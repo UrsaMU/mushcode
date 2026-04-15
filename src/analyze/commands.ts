@@ -2,6 +2,7 @@ import type { ASTNode }  from "../../parser/mod.ts";
 import { findAll }         from "../traverse/walk.ts";
 import { print }           from "../print/mod.ts";
 
+/** A `$command` or `^listen` pattern extracted from the AST. */
 export interface PatternEntry {
   /** Whether this is a `$command` or `^listen` trigger. */
   type:        "dollar" | "listen";

@@ -39,7 +39,16 @@ export interface EvalContext {
   signal?:   AbortSignal;
 }
 
-/** Create a default EvalContext with safe fallback values. */
+/**
+ * Create a default {@link EvalContext} with safe fallback values.
+ *
+ * Provide at minimum `enactor` and `executor` (usually the same UUID for
+ * top-level evaluations). All other fields default to safe empty values and a
+ * recursion limit of 100.
+ *
+ * @example
+ * const ctx = makeContext({ enactor: "player-uuid", executor: "player-uuid" });
+ */
 export function makeContext(
   partial: Partial<EvalContext> & Pick<EvalContext, "enactor" | "executor">,
 ): EvalContext {
@@ -72,13 +81,13 @@ export type EvalThunk = (ctxOverride?: Partial<EvalContext>) => Promise<string>;
  * Implement this in the host application and pass it to EvalEngine.
  */
 export interface ObjectAccessor {
-  /** Read a named attribute from an object (null if absent). */
+  /** Read a named attribute from an object. Returns `null` if the attribute is absent. */
   getAttr(objectId: string, attr: string): Promise<string | null>;
-  /** Resolve a target expression ("me", "#uuid", "Name") → UUID (null if not found). */
+  /** Resolve a target expression (`"me"`, `"#uuid"`, `"Name"`) to an object UUID. Returns `null` if not found. */
   resolveTarget(from: string, expr: string): Promise<string | null>;
   /** Return the display name of an object. */
   getName(objectId: string): Promise<string>;
-  /** Check whether an object has a flag. */
+  /** Return `true` if the object has the named flag. */
   hasFlag(objectId: string, flag: string): Promise<boolean>;
 }
 
@@ -94,9 +103,13 @@ export interface ObjectAccessor {
  * only the thunks it needs (e.g. `if()` evaluates only the taken branch).
  */
 export interface FunctionImpl {
+  /** Argument evaluation strategy. `"eager"` (default) pre-evaluates all args; `"lazy"` passes thunks. */
   eval?:   "eager" | "lazy";
+  /** Minimum number of arguments required; fewer returns a `#-1` error. */
   minArgs: number;
+  /** Maximum number of arguments accepted; more returns a `#-1` error. Use `Infinity` for variadic. */
   maxArgs: number;
+  /** The function implementation. Receives `string[]` when eager, `EvalThunk[]` when lazy. */
   exec: (
     args:   string[] | EvalThunk[],
     ctx:    EvalContext,
@@ -104,8 +117,9 @@ export interface FunctionImpl {
   ) => Promise<string> | string;
 }
 
-/** A registered @command handler. */
+/** A registered `@command` handler (e.g. `@pemit`, `@trigger`). */
 export interface CommandImpl {
+  /** Execute the command. `switches` are the `/switch` tokens; `object` and `value` are the two sides of `=`. */
   exec: (
     switches: string[],
     object:   string | null,
@@ -119,10 +133,16 @@ export interface CommandImpl {
 
 /** Public interface of EvalEngine, used in function/command signatures. */
 export interface IEvalEngine {
+  /** The host-provided database accessor used by DB stdlib functions. */
   readonly accessor: ObjectAccessor;
+  /** Register a softcode function (e.g. `add`, `u`) by name. */
   registerFunction(name: string, impl: FunctionImpl): this;
+  /** Register a softcode `@command` handler by name. */
   registerCommand(name: string, impl: CommandImpl): this;
+  /** Evaluate an AST node to a string. */
   eval(node: ASTNode, ctx: EvalContext): Promise<string>;
+  /** Execute a node for its side effects (commands). */
   exec(node: ASTNode, ctx: EvalContext): Promise<void>;
+  /** Parse and evaluate a raw softcode string. */
   evalString(source: string, ctx: EvalContext): Promise<string>;
 }

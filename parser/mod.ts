@@ -1,3 +1,8 @@
+/**
+ * @module
+ * Parses MUX/RhostMUSH softcode strings into an AST.
+ * Exposes `parse()`, the `ParseError` class, and all AST node types.
+ */
 // Thin Deno wrapper around the Peggy-generated ESM parser.
 // Generated with:  npx peggy --format es --allowed-start-rules Start,LockExpr \
 //                   -o parser/mux-softcode.mjs grammar/mux-softcode.pegjs
@@ -22,14 +27,19 @@ export type NodeType =
 
 /** A character offset, line number (1-based), and column (1-based) in source text. */
 export interface SourcePosition {
+  /** Zero-based byte offset from the start of the source string. */
   offset: number;
+  /** One-based line number. */
   line:   number;
+  /** One-based column number within the line. */
   column: number;
 }
 
 /** The start and end {@link SourcePosition} of an AST node in the original source. */
 export interface SourceLocation {
+  /** Position of the first character of the node. */
   start: SourcePosition;
+  /** Position one past the last character of the node. */
   end:   SourcePosition;
 }
 

@@ -26,13 +26,18 @@ export class EvalEngine implements IEvalEngine {
   private readonly functions = new Map<string, FunctionImpl>();
   private readonly commands  = new Map<string, CommandImpl>();
 
-  constructor(readonly accessor: ObjectAccessor) {}
+  constructor(
+    /** The host-provided database accessor (passed to DB stdlib functions). */
+    readonly accessor: ObjectAccessor,
+  ) {}
 
+  /** Register a softcode function by name (case-insensitive). Returns `this` for chaining. */
   registerFunction(name: string, impl: FunctionImpl): this {
     this.functions.set(name.toLowerCase(), impl);
     return this;
   }
 
+  /** Register a `@command` handler by name (case-insensitive). Returns `this` for chaining. */
   registerCommand(name: string, impl: CommandImpl): this {
     this.commands.set(name.toLowerCase(), impl);
     return this;

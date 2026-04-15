@@ -1,3 +1,18 @@
+/**
+ * @module
+ * Full-featured MUX/RhostMUSH softcode toolkit: parser, AST traversal,
+ * canonical printer, static linter, dependency analyzer, and evaluator.
+ *
+ * Sub-path imports are also available for tree-shaking:
+ * ```ts
+ * import { parse }           from "@ursamu/mushcode/parse";
+ * import { walk }            from "@ursamu/mushcode/traverse";
+ * import { print }           from "@ursamu/mushcode/print";
+ * import { lint }            from "@ursamu/mushcode/lint";
+ * import { extractCommands } from "@ursamu/mushcode/analyze";
+ * import { EvalEngine }      from "@ursamu/mushcode/eval";
+ * ```
+ */
 // @ursamu/mushcode — MUX/RhostMUSH softcode toolkit
 //
 // Sub-path imports are also available for tree-shaking:

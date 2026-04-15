@@ -2,6 +2,7 @@ import type { ASTNode }  from "../../parser/mod.ts";
 import { findAll }         from "../traverse/walk.ts";
 import { print }           from "../print/mod.ts";
 
+/** A single dependency edge found in the softcode: a `u()` call, `@trigger`, or `get()`/`v()` read. */
 export interface DepEntry {
   /**
    * "u"       — u(attr, …) call (attribute function invocation)

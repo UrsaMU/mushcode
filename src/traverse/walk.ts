@@ -12,7 +12,9 @@ import { CHILD_SLOTS } from "./child_slots.ts";
  * `leave` is called after all children have been visited.
  */
 export interface Visitor {
+  /** Called before a node's children are visited. Return `false` to skip all children (and suppress `leave`). */
   enter?: (node: ASTNode) => false | void;
+  /** Called after all children have been visited. */
   leave?: (node: ASTNode) => void;
 }
 
