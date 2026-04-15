@@ -1,8 +1,18 @@
 import type { FunctionImpl } from "../context.ts";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+/**
+ * Maximum number of characters any single string-building function may produce.
+ * Mirrors TinyMUX's per-expression output limit (~8 000 chars).
+ * Prevents unbounded memory allocation from player-authored softcode.
+ */
+export const MAX_STRING_LEN = 8_000;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function pad(str: string, width: number, fill: string, align: "left" | "right" | "center"): string {
+  if (width > MAX_STRING_LEN) throw new Error("OUTPUT TOO LONG");
   const ch  = fill[0] ?? " ";
   const len = str.length;
   if (len >= width) return str;
@@ -126,6 +136,7 @@ export const stringFunctions: Record<string, FunctionImpl> = {
     exec(args) {
       const n = parseInt((args as string[])[0], 10);
       if (isNaN(n) || n < 0) throw new Error("ARGUMENT IS NOT A NUMBER");
+      if (n > MAX_STRING_LEN) throw new Error("OUTPUT TOO LONG");
       return " ".repeat(n);
     },
   },
@@ -136,6 +147,7 @@ export const stringFunctions: Record<string, FunctionImpl> = {
       const [str, nStr] = args as string[];
       const n = parseInt(nStr, 10);
       if (isNaN(n) || n < 0) throw new Error("ARGUMENT IS NOT A NUMBER");
+      if (str.length * n > MAX_STRING_LEN) throw new Error("OUTPUT TOO LONG");
       return str.repeat(n);
     },
   },

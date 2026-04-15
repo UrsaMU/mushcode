@@ -2,8 +2,8 @@
 // 02 — % substitution codes
 // ============================================================================
 
-import { assertEquals } from "jsr:@std/assert";
-import { describe, it } from "jsr:@std/testing/bdd";
+import { assertEquals } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
 import { mustParse, substitutions, findAll } from "./helpers.ts";
 
 function sub(code: string) {

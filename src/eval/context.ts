@@ -32,7 +32,9 @@ export interface EvalContext {
   /** Current recursion depth (incremented on each u() call) */
   depth:     number;
   /** Maximum allowed recursion depth before returning #-1 error */
-  maxDepth:  number;
+  maxDepth:     number;
+  /** Maximum total output length per evalString call (default 65 536) */
+  maxOutputLen: number;
   /** Optional cancellation signal */
   signal?:   AbortSignal;
 }
@@ -46,8 +48,9 @@ export function makeContext(
     args:      [],
     registers: new Map(),
     iterStack: [],
-    depth:     0,
-    maxDepth:  100,
+    depth:        0,
+    maxDepth:     100,
+    maxOutputLen: 65_536,
     ...partial,
   };
 }

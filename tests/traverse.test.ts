@@ -2,8 +2,8 @@
 // Traverse — walk, transform, findAll, findFirst, findFirstOrNull
 // ============================================================================
 
-import { assertEquals, assertThrows } from "jsr:@std/assert";
-import { describe, it } from "jsr:@std/testing/bdd";
+import { assertEquals, assertThrows } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
 import { parse } from "../parser/mod.ts";
 import type { ASTNode } from "../parser/mod.ts";
 import {
@@ -18,13 +18,6 @@ import {
 
 function p(text: string): ASTNode {
   return parse(text, "Start");
-}
-
-// Collect node types in enter order
-function enterTypes(root: ASTNode): string[] {
-  const types: string[] = [];
-  walk(root, { enter(n) { types.push(n.type); } });
-  return types;
 }
 
 // ── walk ───────────────────────────────────────────────────────────────────────

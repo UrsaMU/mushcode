@@ -5,9 +5,9 @@
 // comment explaining the pre-fix behaviour.
 // ============================================================================
 
-import { assertEquals, assertNotEquals } from "jsr:@std/assert";
-import { describe, it } from "jsr:@std/testing/bdd";
-import { mustParse, mustFail, parseLock, findAll, findFirst } from "./helpers.ts";
+import { assertEquals, assertNotEquals } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
+import { mustParse, findAll, findFirst } from "./helpers.ts";
 
 // ── BUG 1: %: (enactor objid) was not in SubCode ─────────────────────────────
 

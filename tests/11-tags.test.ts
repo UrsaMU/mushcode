@@ -7,9 +7,9 @@
 //          Server/src/functions.c (fun_tag, fun_listtags, fun_tagmatch)
 // ============================================================================
 
-import { assertEquals, assertNotEquals } from "jsr:@std/assert";
-import { describe, it } from "jsr:@std/testing/bdd";
-import { mustParse, mustFail, findAll, findFirst } from "./helpers.ts";
+import { assertEquals, assertNotEquals } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
+import { mustParse, findAll, findFirst } from "./helpers.ts";
 
 // ── TagRef node ───────────────────────────────────────────────────────────────
 

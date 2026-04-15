@@ -2,15 +2,15 @@
 // 13 — EvalEngine: stdlib functions, substitutions, and error handling
 // ============================================================================
 
-import { assertEquals } from "jsr:@std/assert";
-import { describe, it } from "jsr:@std/testing/bdd";
+import { assertEquals } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
 import { EvalEngine, makeContext, registerStdlib } from "../src/eval/mod.ts";
 import type { EvalContext, ObjectAccessor } from "../src/eval/mod.ts";
 
 // ── Test fixture ──────────────────────────────────────────────────────────────
 
 const mockAccessor: ObjectAccessor = {
-  async getAttr(objectId, attr) {
+  getAttr(objectId, attr) {
     const db: Record<string, Record<string, string>> = {
       obj1: {
         NAME:      "Alice",
@@ -22,20 +22,20 @@ const mockAccessor: ObjectAccessor = {
       },
       obj2: { NAME: "Bob", SCORE: "7" },
     };
-    return db[objectId]?.[attr.toUpperCase()] ?? null;
+    return Promise.resolve(db[objectId]?.[attr.toUpperCase()] ?? null);
   },
-  async resolveTarget(_from, expr) {
-    if (expr === "me" || expr === "obj1") return "obj1";
-    if (expr === "obj2" || expr === "Bob") return "obj2";
-    return null;
+  resolveTarget(_from, expr) {
+    if (expr === "me" || expr === "obj1") return Promise.resolve("obj1");
+    if (expr === "obj2" || expr === "Bob") return Promise.resolve("obj2");
+    return Promise.resolve(null);
   },
-  async getName(objectId) {
-    if (objectId === "obj1") return "Alice";
-    if (objectId === "obj2") return "Bob";
-    return objectId;
+  getName(objectId) {
+    if (objectId === "obj1") return Promise.resolve("Alice");
+    if (objectId === "obj2") return Promise.resolve("Bob");
+    return Promise.resolve(objectId);
   },
-  async hasFlag(_id, flag) {
-    return flag === "wizard" && _id === "obj1";
+  hasFlag(_id, flag) {
+    return Promise.resolve(flag === "wizard" && _id === "obj1");
   },
 };
 
@@ -49,7 +49,7 @@ function ctx(overrides: Partial<EvalContext> = {}): EvalContext {
   return makeContext({ enactor: "obj1", executor: "obj1", ...overrides });
 }
 
-async function ev(src: string, overrides: Partial<EvalContext> = {}): Promise<string> {
+function ev(src: string, overrides: Partial<EvalContext> = {}): Promise<string> {
   return makeEngine().evalString(src, ctx(overrides));
 }
 
@@ -308,15 +308,15 @@ describe("eval — u()", () => {
     const result = await ev("[setq(0,outer)][u(me/FN_ADD,1,2)][r(0)]");
     assertEquals(result, "3outer"); // FN_ADD returns "3", outer r(0) still "outer"
   });
-  it("u %@ = outer executor",          async () => {
+  it("u %@ = outer executor", async () => {
     // FN_CALLER attr returns %@ (the caller)
     const engine = makeEngine();
     engine.accessor; // just touch it
     // Register a custom attr getter that exposes %@
     const customAccessor: ObjectAccessor = {
       ...mockAccessor,
-      async getAttr(id, attr) {
-        if (attr === "FN_CALLER") return "%@";
+      getAttr(id, attr) {
+        if (attr === "FN_CALLER") return Promise.resolve("%@");
         return mockAccessor.getAttr(id, attr);
       },
     };
@@ -324,5 +324,66 @@ describe("eval — u()", () => {
     registerStdlib(e);
     const result = await e.evalString("[u(me/FN_CALLER)]", ctx());
     assertEquals(result, "obj1");  // caller = previous executor = obj1
+  });
+});
+
+// ── Security: resource exhaustion ────────────────────────────────────────────
+// RED tests written before the patch — they must fail until M-1 and M-2 are fixed.
+
+describe("eval — security: unbounded allocation (M-1)", () => {
+  it("repeat with huge n → #-1", async () => {
+    // 50 000 reps × 1 char = 50 KB — must be capped, not allocated
+    assertEquals(await ev("[repeat(A,50000)]"), "#-1 OUTPUT TOO LONG");
+  });
+
+  it("space with huge n → #-1", async () => {
+    assertEquals(await ev("[space(50000)]"), "#-1 OUTPUT TOO LONG");
+  });
+
+  it("ljust with huge width → #-1", async () => {
+    assertEquals(await ev("[ljust(x,50000)]"), "#-1 OUTPUT TOO LONG");
+  });
+
+  it("rjust with huge width → #-1", async () => {
+    assertEquals(await ev("[rjust(x,50000)]"), "#-1 OUTPUT TOO LONG");
+  });
+
+  it("center with huge width → #-1", async () => {
+    assertEquals(await ev("[center(x,50000)]"), "#-1 OUTPUT TOO LONG");
+  });
+
+  // Boundary: MAX_STRING_LEN itself is allowed
+  it("repeat exactly MAX_STRING_LEN = ok", async () => {
+    const result = await ev("[strlen([repeat(A,8000)])]");
+    assertEquals(result, "8000");
+  });
+
+  it("space exactly MAX_STRING_LEN = ok", async () => {
+    const result = await ev("[strlen([space(8000)])]");
+    assertEquals(result, "8000");
+  });
+});
+
+describe("eval — security: output budget (M-2)", () => {
+  it("concatenating chunks beyond maxOutputLen → #-1", async () => {
+    const engine = makeEngine();
+    // 4 × 300 = 1200 chars; budget is 1000 — must be rejected
+    const c = ctx({ maxOutputLen: 1_000 });
+    const result = await engine.evalString(
+      "[repeat(A,300)][repeat(A,300)][repeat(A,300)][repeat(A,300)]",
+      c,
+    );
+    assertEquals(result, "#-1 OUTPUT LIMIT EXCEEDED");
+  });
+
+  it("output within budget is returned normally", async () => {
+    const engine = makeEngine();
+    const c = ctx({ maxOutputLen: 1_000 });
+    // 3 × 300 = 900 < 1000 — should succeed
+    const result = await engine.evalString(
+      "[repeat(A,300)][repeat(A,300)][repeat(A,300)]",
+      c,
+    );
+    assertEquals(result.length, 900);
   });
 });

@@ -2,8 +2,8 @@
 // Analyze — extractCommands, extractDeps, extractTagRefs
 // ============================================================================
 
-import { assertEquals } from "jsr:@std/assert";
-import { describe, it } from "jsr:@std/testing/bdd";
+import { assertEquals } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
 import { parse } from "../parser/mod.ts";
 import type { ASTNode } from "../parser/mod.ts";
 import { extractCommands, extractDeps, extractTagRefs } from "../src/analyze/mod.ts";

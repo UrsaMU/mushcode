@@ -41,7 +41,7 @@ export class EvalEngine implements IEvalEngine {
   /** Parse and evaluate a raw softcode string. */
   async evalString(source: string, ctx: EvalContext): Promise<string> {
     const ast = parse(source, "Start");
-    return this.eval(ast, ctx);
+    return await this.eval(ast, ctx);
   }
 
   // ── Core evaluator ──────────────────────────────────────────────────────────
@@ -135,7 +135,13 @@ export class EvalEngine implements IEvalEngine {
 
   private async evalParts(parts: ASTNode[], ctx: EvalContext): Promise<string> {
     const chunks: string[] = [];
-    for (const p of parts) chunks.push(await this.eval(p, ctx));
+    let total = 0;
+    for (const p of parts) {
+      const chunk = await this.eval(p, ctx);
+      total += chunk.length;
+      if (total > ctx.maxOutputLen) return "#-1 OUTPUT LIMIT EXCEEDED";
+      chunks.push(chunk);
+    }
     return chunks.join("");
   }
 

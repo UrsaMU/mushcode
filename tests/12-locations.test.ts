@@ -2,8 +2,8 @@
 // 12 — Source locations: every node carries { start, end } with offset/line/col
 // ============================================================================
 
-import { assertEquals, assertExists } from "jsr:@std/assert";
-import { describe, it } from "jsr:@std/testing/bdd";
+import { assertEquals, assertExists } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
 import { parse } from "../parser/mod.ts";
 import type { ASTNode, SourceLocation } from "../parser/mod.ts";
 import { findAll } from "./helpers.ts";
