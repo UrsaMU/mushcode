@@ -8,6 +8,26 @@ export interface IterFrame {
   index: number;  // #@ — current position (1-based)
 }
 
+// ── Custom substitution handlers ──────────────────────────────────────────────
+
+/** A custom substitution handler registered via `EvalEngine.registerSub()`. */
+export type SubHandlerFn = (code: string, ctx: EvalContext) => Promise<string> | string;
+
+// ── Command fallback handler ──────────────────────────────────────────────────
+
+/**
+ * A fallback handler called when an `@command` is executed but no specific
+ * handler is registered for that command name.
+ */
+export type CommandFallbackFn = (
+  name:     string,
+  switches: string[],
+  object:   string | null,
+  value:    string | null,
+  ctx:      EvalContext,
+  engine:   IEvalEngine,
+) => Promise<void>;
+
 // ── Evaluation context ────────────────────────────────────────────────────────
 
 /**
@@ -139,6 +159,15 @@ export interface IEvalEngine {
   registerFunction(name: string, impl: FunctionImpl): this;
   /** Register a softcode `@command` handler by name. */
   registerCommand(name: string, impl: CommandImpl): this;
+  /**
+   * Register a custom `%<code>` substitution handler.
+   * Custom handlers are checked before built-in substitutions.
+   */
+  registerSub(match: string | ((code: string) => boolean), fn: SubHandlerFn): this;
+  /**
+   * Register a fallback handler for `@commands` with no specific handler registered.
+   */
+  registerCommandFallback(fn: CommandFallbackFn): this;
   /** Evaluate an AST node to a string. */
   eval(node: ASTNode, ctx: EvalContext): Promise<string>;
   /** Execute a node for its side effects (commands). */

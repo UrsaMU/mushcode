@@ -27,5 +27,5 @@ export type {
   EvalContext, EvalThunk,
   ObjectAccessor, IEvalEngine,
   FunctionImpl, CommandImpl,
-  IterFrame,
+  IterFrame, SubHandlerFn, CommandFallbackFn,
 }                              from "./context.ts";

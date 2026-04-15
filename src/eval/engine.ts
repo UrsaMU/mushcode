@@ -4,7 +4,7 @@ import type {
   EvalContext, EvalThunk,
   FunctionImpl, CommandImpl,
   ObjectAccessor, IEvalEngine,
-  IterFrame,
+  IterFrame, SubHandlerFn, CommandFallbackFn,
 } from "./context.ts";
 
 // ── EvalEngine ────────────────────────────────────────────────────────────────
@@ -23,8 +23,10 @@ import type {
  * // → "3"
  */
 export class EvalEngine implements IEvalEngine {
-  private readonly functions = new Map<string, FunctionImpl>();
-  private readonly commands  = new Map<string, CommandImpl>();
+  private readonly functions   = new Map<string, FunctionImpl>();
+  private readonly commands    = new Map<string, CommandImpl>();
+  private readonly subHandlers: Array<{ match: string | ((code: string) => boolean); fn: SubHandlerFn }> = [];
+  private fallbackCommand?: CommandFallbackFn;
 
   constructor(
     /** The host-provided database accessor (passed to DB stdlib functions). */
@@ -40,6 +42,34 @@ export class EvalEngine implements IEvalEngine {
   /** Register a `@command` handler by name (case-insensitive). Returns `this` for chaining. */
   registerCommand(name: string, impl: CommandImpl): this {
     this.commands.set(name.toLowerCase(), impl);
+    return this;
+  }
+
+  /**
+   * Register a custom `%<code>` substitution handler.
+   *
+   * Custom handlers are checked **before** built-in substitutions, so you can
+   * override any built-in code. `match` is either an exact code string (e.g.
+   * `"s"` for `%s`) or a predicate (e.g. `code => code.startsWith("V")` for
+   * `%Va`–`%Vz`).
+   *
+   * @returns `this` for chaining.
+   */
+  registerSub(
+    match: string | ((code: string) => boolean),
+    fn: SubHandlerFn,
+  ): this {
+    this.subHandlers.push({ match, fn });
+    return this;
+  }
+
+  /**
+   * Register a fallback handler for `@commands` that have no specific handler registered.
+   *
+   * @returns `this` for chaining.
+   */
+  registerCommandFallback(fn: CommandFallbackFn): this {
+    this.fallbackCommand = fn;
     return this;
   }
 
@@ -113,10 +143,13 @@ export class EvalEngine implements IEvalEngine {
       case "AtCommand": {
         const name = (n.name as string).toLowerCase();
         const impl = this.commands.get(name);
-        if (!impl) break;
         const obj = n.object ? await this.eval(n.object as ASTNode, ctx) : null;
         const val = n.value  ? await this.eval(n.value  as ASTNode, ctx) : null;
-        await impl.exec(n.switches as string[], obj, val, ctx, this);
+        if (impl) {
+          await impl.exec(n.switches as string[], obj, val, ctx, this);
+        } else if (this.fallbackCommand) {
+          await this.fallbackCommand(n.name as string, n.switches as string[], obj, val, ctx, this);
+        }
         break;
       }
 
@@ -181,6 +214,12 @@ export class EvalEngine implements IEvalEngine {
   }
 
   private async evalSub(code: string, ctx: EvalContext): Promise<string> {
+    // Custom substitution handlers — checked before built-ins
+    for (const { match, fn } of this.subHandlers) {
+      if (typeof match === "string" ? match === code : match(code)) {
+        return fn(code, ctx);
+      }
+    }
     // Positional arguments
     if (/^[0-9]$/.test(code))          return ctx.args[parseInt(code)] ?? "";
     // Registers

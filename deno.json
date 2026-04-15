@@ -1,6 +1,6 @@
 {
   "name": "@ursamu/mushcode",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Parser, evaluator, linter, printer, and analyzer for MUX/RhostMUSH softcode.",
   "license": "MIT",
   "exports": {
