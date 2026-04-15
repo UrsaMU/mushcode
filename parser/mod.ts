@@ -2,6 +2,17 @@
  * @module
  * Parses MUX/RhostMUSH softcode strings into an AST.
  * Exposes `parse()`, the `ParseError` class, and all AST node types.
+ *
+ * @example
+ * ```ts
+ * import { parse } from "@ursamu/mushcode/parse";
+ *
+ * const ast = parse("$+finger *:@pemit %#=[u(me/FN_FINGER,%0)]");
+ * console.log(ast.type); // "DollarPattern"
+ *
+ * const lock = parse("flag^WIZARD|attr^STAFF:1", "LockExpr");
+ * console.log(lock.type); // "LockOr"
+ * ```
  */
 // Thin Deno wrapper around the Peggy-generated ESM parser.
 // Generated with:  npx peggy --format es --allowed-start-rules Start,LockExpr \

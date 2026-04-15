@@ -2,6 +2,16 @@
  * @module
  * Static analysis for softcode: `lint()` runs built-in rules and returns
  * `Diagnostic` findings with severity, rule ID, and the offending AST node.
+ *
+ * @example
+ * ```ts
+ * import { parse } from "@ursamu/mushcode/parse";
+ * import { lint }  from "@ursamu/mushcode/lint";
+ *
+ * const ast  = parse("$finger:@pemit %#=[u(me/FN)]");
+ * const diags = lint(ast);
+ * diags.forEach(d => console.log(`[${d.severity}] ${d.rule}: ${d.message}`));
+ * ```
  */
 import type { ASTNode }                from "../../parser/mod.ts";
 import { walk }                         from "../traverse/walk.ts";
