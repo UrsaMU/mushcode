@@ -8,7 +8,7 @@ import { parse } from "../parser/mod.ts";
 import type { ASTNode } from "../parser/mod.ts";
 import { lint, RULES, ariasFromFunctions } from "../src/lint/mod.ts";
 import type { Diagnostic } from "../src/lint/mod.ts";
-import { rhostArities } from "../src/plugins/rhost/mod.ts";
+import { rhostArities } from "@ursamu/mushcode-rhost";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
