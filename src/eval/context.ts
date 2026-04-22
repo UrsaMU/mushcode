@@ -149,6 +149,56 @@ export interface CommandImpl {
   ) => Promise<void>;
 }
 
+// ── Plugin interface ──────────────────────────────────────────────────────────
+
+/**
+ * A platform or capability plugin that extends an {@link IEvalEngine} with
+ * additional functions, commands, substitution handlers, or a command fallback.
+ *
+ * Install a plugin by calling `engine.use(plugin)`. Registrations are applied
+ * in order — functions first, then commands, subs, then the fallback — so any
+ * existing registration with the same name is silently replaced.
+ *
+ * @example
+ * ```ts
+ * import { EvalEngine, registerStdlib } from "@ursamu/mushcode/eval";
+ * import { rhostPlugin } from "@ursamu/mushcode/rhost";
+ *
+ * const engine = new EvalEngine(accessor);
+ * registerStdlib(engine);
+ * engine.use(rhostPlugin);
+ * ```
+ */
+export interface MushPlugin {
+  /** Display name, e.g. `"@ursamu/mushcode-rhost"`. */
+  readonly name: string;
+  /** SemVer string, e.g. `"1.0.0"`. */
+  readonly version: string;
+  /**
+   * Softcode functions to register, keyed by lower-case MUSH function name.
+   * Each entry is passed to {@link IEvalEngine.registerFunction}.
+   */
+  readonly functions?: Record<string, FunctionImpl>;
+  /**
+   * `@command` handlers to register, keyed by lower-case command name.
+   * Each entry is passed to {@link IEvalEngine.registerCommand}.
+   */
+  readonly commands?: Record<string, CommandImpl>;
+  /**
+   * Custom `%<code>` substitution handlers to install.
+   * Each entry is passed to {@link IEvalEngine.registerSub}.
+   */
+  readonly subs?: ReadonlyArray<{
+    readonly match: string | ((code: string) => boolean);
+    readonly fn: SubHandlerFn;
+  }>;
+  /**
+   * Fallback `@command` handler.
+   * Passed to {@link IEvalEngine.registerCommandFallback} when present.
+   */
+  readonly commandFallback?: CommandFallbackFn;
+}
+
 // ── Engine interface (forward declaration for use in FunctionImpl/CommandImpl) ─
 
 /** Public interface of EvalEngine, used in function/command signatures. */
@@ -168,6 +218,12 @@ export interface IEvalEngine {
    * Register a fallback handler for `@commands` with no specific handler registered.
    */
   registerCommandFallback(fn: CommandFallbackFn): this;
+  /**
+   * Install a {@link MushPlugin}, registering all of its functions, commands,
+   * substitution handlers, and command fallback in one call.
+   * Returns `this` for chaining.
+   */
+  use(plugin: MushPlugin): this;
   /** Evaluate an AST node to a string. */
   eval(node: ASTNode, ctx: EvalContext): Promise<string>;
   /** Execute a node for its side effects (commands). */

@@ -9,15 +9,24 @@ import { ARITIES }          from "../builtin_arities.ts";
  * Reports FunctionCall nodes where the number of arguments falls outside the
  * known [minArgs, maxArgs] range for that built-in function.
  *
- * Only functions listed in ARITIES are checked; user-defined functions and
- * unrecognised names are silently skipped.
+ * Only functions listed in ARITIES (plus any supplied via `extraArities`) are
+ * checked; user-defined functions and unrecognised names are silently skipped.
+ *
+ * @param root - The AST root to inspect.
+ * @param extraArities - Additional `[minArgs, maxArgs]` entries to merge with
+ *   the built-in table.  Plugin arity maps (e.g. `rhostArities`) should be
+ *   passed here.  Entries override the built-in table when names collide.
  */
-export function checkArgCount(root: ASTNode): Diagnostic[] {
+export function checkArgCount(
+  root: ASTNode,
+  extraArities?: Record<string, [number, number]>,
+): Diagnostic[] {
+  const allArities = extraArities ? { ...ARITIES, ...extraArities } : ARITIES;
   const diagnostics: Diagnostic[] = [];
 
   for (const node of findAll(root, "FunctionCall")) {
     const name  = (node.name as string).toLowerCase();
-    const arity = ARITIES[name];
+    const arity = allArities[name];
     if (!arity) continue; // not a known built-in — skip
 
     const [min, max] = arity;

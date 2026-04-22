@@ -6,8 +6,9 @@ import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { parse } from "../parser/mod.ts";
 import type { ASTNode } from "../parser/mod.ts";
-import { lint, RULES } from "../src/lint/mod.ts";
+import { lint, RULES, ariasFromFunctions } from "../src/lint/mod.ts";
 import type { Diagnostic } from "../src/lint/mod.ts";
+import { rhostArities } from "../src/plugins/rhost/mod.ts";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -228,5 +229,138 @@ describe("lint — options", () => {
     const ast = p("$look:@pemit %#=%1");
     const diags = lint(ast, { rules: [] });
     assertEquals(diags.length, 0);
+  });
+});
+
+// ── arg-count: extraArities ────────────────────────────────────────────────────
+
+describe("arg-count — extraArities", () => {
+  it("unknown function produces no diagnostic without extraArities", () => {
+    // vadd() is rhost-specific — invisible to the default linter
+    const ast = p("[vadd(1 2)]");
+    const diags = lint(ast, { rules: ["arg-count"] });
+    assertEquals(diags.length, 0);
+  });
+
+  it("with extraArities: too-few args on a plugin function warns", () => {
+    // vadd() requires minArgs:2 — one arg should warn
+    const ast = p("[vadd(1 2)]");
+    const diags = lint(ast, { rules: ["arg-count"], extraArities: rhostArities });
+    assertEquals(diags.length, 1);
+    assertEquals(diags[0].rule, "arg-count");
+    assertEquals(diags[0].message.includes("at least"), true);
+  });
+
+  it("with extraArities: correct arg count produces no diagnostic", () => {
+    const ast = p("[vadd(1 2,3 4)]");
+    const diags = lint(ast, { rules: ["arg-count"], extraArities: rhostArities });
+    assertEquals(diags.length, 0);
+  });
+
+  it("with extraArities: too-many args on a fixed-arity plugin function warns", () => {
+    // type() accepts exactly 1 arg
+    const ast = p("[type(me,extra)]");
+    const diags = lint(ast, { rules: ["arg-count"], extraArities: rhostArities });
+    assertEquals(diags.length, 1);
+    assertEquals(diags[0].message.includes("at most"), true);
+  });
+
+  it("with extraArities: config() too few args warns", () => {
+    const ast = p("[config()]");
+    const diags = lint(ast, { rules: ["arg-count"], extraArities: rhostArities });
+    assertEquals(diags.length, 1);
+  });
+
+  it("with extraArities: mudname() with no args is valid", () => {
+    const ast = p("[mudname()]");
+    const diags = lint(ast, { rules: ["arg-count"], extraArities: rhostArities });
+    assertEquals(diags.length, 0);
+  });
+
+  it("extraArities does not suppress unrelated built-in warnings", () => {
+    // div() still requires 2 args even when extraArities is set
+    const ast = p("[div(1)]");
+    const diags = lint(ast, { rules: ["arg-count"], extraArities: rhostArities });
+    assertEquals(diags.length, 1);
+    assertEquals(diags[0].rule, "arg-count");
+  });
+
+  it("extraArities can override a built-in arity entry", () => {
+    // Override add() to require exactly 2 args; add(1,2,3) should now warn
+    const overrideArities: Record<string, [number, number]> = { add: [2, 2] };
+    const ast = p("[add(1,2,3)]");
+    const diagsBefore = lint(ast, { rules: ["arg-count"] });
+    assertEquals(diagsBefore.length, 0); // variadic by default — no warning
+
+    const diagsAfter = lint(ast, { rules: ["arg-count"], extraArities: overrideArities });
+    assertEquals(diagsAfter.length, 1);
+  });
+});
+
+// ── ariasFromFunctions utility ────────────────────────────────────────────────
+
+describe("ariasFromFunctions", () => {
+  it("derives arity pairs from a function map", () => {
+    const fns = {
+      foo: { minArgs: 1, maxArgs: 3 },
+      bar: { minArgs: 0, maxArgs: 0 },
+      baz: { minArgs: 2, maxArgs: Infinity },
+    };
+    const arities = ariasFromFunctions(fns);
+    assertEquals(arities["foo"], [1, 3]);
+    assertEquals(arities["bar"], [0, 0]);
+    assertEquals(arities["baz"], [2, Infinity]);
+  });
+
+  it("produces an empty object from an empty map", () => {
+    assertEquals(ariasFromFunctions({}), {});
+  });
+
+  it("result is usable as extraArities", () => {
+    const fns = { myFunc: { minArgs: 2, maxArgs: 2 } };
+    const ast = p("[myFunc(a)]"); // too few
+    const diags = lint(ast, { rules: ["arg-count"], extraArities: ariasFromFunctions(fns) });
+    assertEquals(diags.length, 1);
+    assertEquals(diags[0].rule, "arg-count");
+  });
+});
+
+// ── rhostArities coverage ────────────────────────────────────────────────────
+
+describe("rhostArities", () => {
+  it("contains pure math functions", () => {
+    assertEquals(rhostArities["vadd"] !== undefined, true);
+    assertEquals(rhostArities["sin"][0], 1);
+    assertEquals(rhostArities["sin"][1], 1);
+  });
+
+  it("contains pure string functions", () => {
+    assertEquals(rhostArities["soundex"] !== undefined, true);
+  });
+
+  it("contains pure encoding functions", () => {
+    assertEquals(rhostArities["encode64"] !== undefined, true);
+    assertEquals(rhostArities["crc32"] !== undefined, true);
+  });
+
+  it("contains DB-backed functions", () => {
+    assertEquals(rhostArities["type"][0], 1);
+    assertEquals(rhostArities["type"][1], 1);
+    assertEquals(rhostArities["flags"][0], 1);
+    assertEquals(rhostArities["lattr"][0], 1);
+    assertEquals(rhostArities["lattr"][1], 2);
+  });
+
+  it("contains config functions", () => {
+    assertEquals(rhostArities["config"][0], 1);
+    assertEquals(rhostArities["config"][1], 1);
+    assertEquals(rhostArities["mudname"][0], 0);
+    assertEquals(rhostArities["mudname"][1], 0);
+  });
+
+  it("contains cluster functions", () => {
+    assertEquals(rhostArities["cluster_get"][0], 2);
+    assertEquals(rhostArities["cluster_set"][0], 3);
+    assertEquals(rhostArities["cluster_u"][1], Infinity);
   });
 });

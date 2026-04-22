@@ -1,0 +1,24 @@
+{
+  "name": "@ursamu/mushcode",
+  "version": "0.4.0",
+  "description": "Parser, evaluator, linter, printer, and analyzer for MUX/RhostMUSH softcode.",
+  "license": "MIT",
+  "main": "./dist/node.cjs",
+  "module": "./dist/node.mjs",
+  "types": "./dist/node.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/node.d.ts",
+      "require": "./dist/node.cjs",
+      "import": "./dist/node.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:grammar": "npx peggy --format es --allowed-start-rules Start,LockExpr -o parser/mux-softcode.mjs grammar/mux-softcode.pegjs && npx peggy --allowed-start-rules Start,LockExpr -o parser/mux-softcode.js grammar/mux-softcode.pegjs"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

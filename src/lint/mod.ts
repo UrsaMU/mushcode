@@ -37,10 +37,94 @@ export interface Diagnostic {
   node:     ASTNode;
 }
 
+/**
+ * A single lint rule implementation.
+ *
+ * Rules are pure functions: given the AST root they return an array of
+ * {@link Diagnostic} findings (empty when nothing is wrong).
+ *
+ * Plugin authors export an array of `RuleImpl` values (e.g. `rhostLintRules`)
+ * and callers pass them via {@link LintOptions.extraRules}.
+ */
+export type RuleImpl = (root: ASTNode) => Diagnostic[];
+
 /** Options passed to the {@link lint} function. */
 export interface LintOptions {
   /** Whitelist of rule IDs to run.  Omit to run all rules. */
   rules?: string[];
+  /**
+   * Extra `[minArgs, maxArgs]` arity entries to augment the built-in table for
+   * the `arg-count` rule.  Pass a plugin's arity map here so the linter can
+   * flag wrong call-sites for platform-specific functions.
+   *
+   * Entries in `extraArities` override the built-in table when names collide.
+   *
+   * @example
+   * ```ts
+   * import { lint }         from "@ursamu/mushcode/lint";
+   * import { rhostArities } from "@ursamu/mushcode/rhost";
+   *
+   * const diags = lint(ast, { extraArities: rhostArities });
+   * // [vadd(1 2)] now warns: vadd() requires at least 2 arguments, got 1
+   * ```
+   */
+  extraArities?: Record<string, [number, number]>;
+  /**
+   * Additional rule implementations to run after the built-in rules.
+   *
+   * Each entry is a {@link RuleImpl} — a plain function that receives the AST
+   * root and returns an array of {@link Diagnostic} findings.  Plugin authors
+   * export these arrays (e.g. `rhostLintRules`) so callers can opt in:
+   *
+   * @example
+   * ```ts
+   * import { lint }              from "@ursamu/mushcode/lint";
+   * import { rhostArities,
+   *          rhostLintRules }    from "@ursamu/mushcode/rhost";
+   *
+   * const diags = lint(ast, {
+   *   extraArities: rhostArities,
+   *   extraRules:   rhostLintRules,
+   * });
+   * // [digest(md5,data)] → rhost-digest-algorithm warning
+   * // [lcon(here,players)] → rhost-lcon-type warning
+   * ```
+   */
+  extraRules?: RuleImpl[];
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+
+/**
+ * Derive an arity map from a record of function implementations.
+ *
+ * Accepts any object whose values expose `minArgs` and `maxArgs` — compatible
+ * with `FunctionImpl` from `@ursamu/mushcode/eval` as well as hand-written
+ * arity objects.
+ *
+ * Use this to build an `extraArities` map for {@link lint} from any plugin's
+ * function table without importing the lint module into the plugin itself.
+ *
+ * @param fns - A record of `{ minArgs, maxArgs }` entries (e.g. a plugin's
+ *   `functions` map).
+ * @returns A `Record<string, [number, number]>` ready to pass as
+ *   `LintOptions.extraArities`.
+ *
+ * @example
+ * ```ts
+ * import { ariasFromFunctions } from "@ursamu/mushcode/lint";
+ * import { myPlugin }            from "./my-plugin.ts";
+ *
+ * const myArities = ariasFromFunctions(myPlugin.functions ?? {});
+ * const diags = lint(ast, { extraArities: myArities });
+ * ```
+ */
+export function ariasFromFunctions(
+  fns: Record<string, { minArgs: number; maxArgs: number }>,
+): Record<string, [number, number]> {
+  return Object.fromEntries(
+    Object.entries(fns).map(([name, impl]) => [name.toLowerCase(), [impl.minArgs, impl.maxArgs]]),
+  );
 }
 
 // ── Available rules ───────────────────────────────────────────────────────────
@@ -86,10 +170,15 @@ export function lint(root: ASTNode, opts?: LintOptions): Diagnostic[] {
     diags.push(...checkIterVarOutsideIter(root));
   }
   if (enabled.has("arg-count")) {
-    diags.push(...checkArgCount(root));
+    diags.push(...checkArgCount(root, opts?.extraArities));
   }
   if (enabled.has("register-before-set")) {
     diags.push(...checkRegisterBeforeSet(root));
+  }
+
+  // Extra rules supplied by the caller (e.g. platform plugin rule packs)
+  for (const rule of opts?.extraRules ?? []) {
+    diags.push(...rule(root));
   }
 
   return diags;

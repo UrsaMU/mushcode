@@ -1,6 +1,6 @@
 {
   "name": "@ursamu/mushcode",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "Parser, evaluator, linter, printer, and analyzer for MUX/RhostMUSH softcode.",
   "license": "MIT",
   "exports": {
@@ -10,7 +10,9 @@
     "./print":     "./src/print/mod.ts",
     "./lint":      "./src/lint/mod.ts",
     "./analyze":   "./src/analyze/mod.ts",
-    "./eval":      "./src/eval/mod.ts"
+    "./eval":      "./src/eval/mod.ts",
+    "./rhost":     "./src/plugins/rhost/mod.ts",
+    "./testkit":   "./src/testkit/mod.ts"
   },
   "tasks": {
     "test":  "deno test --allow-read tests/",
@@ -20,7 +22,8 @@
     "exclude": ["parser/mux-softcode.mjs", "parser/mux-softcode.js"]
   },
   "imports": {
-    "@std/assert":  "jsr:@std/assert@^1",
-    "@std/testing": "jsr:@std/testing@^1"
+    "@ursamu/mushcode-rhost": "../mushcode-rhost-plugin/mod.ts",
+    "@std/assert":            "jsr:@std/assert@^1",
+    "@std/testing":           "jsr:@std/testing@^1"
   }
 }

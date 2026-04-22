@@ -46,8 +46,8 @@ export { print }                                    from "./src/print/mod.ts";
 export type { PrintOptions, PrintMode }             from "./src/print/mod.ts";
 
 // ── Lint ──────────────────────────────────────────────────────────────────────
-export { lint, RULES }                              from "./src/lint/mod.ts";
-export type { Diagnostic, Severity, LintOptions, RuleId }
+export { lint, RULES, ariasFromFunctions }          from "./src/lint/mod.ts";
+export type { Diagnostic, Severity, LintOptions, RuleId, RuleImpl }
                                                     from "./src/lint/mod.ts";
 
 // ── Analyze ───────────────────────────────────────────────────────────────────
@@ -59,5 +59,5 @@ export type { PatternEntry, DepEntry }              from "./src/analyze/mod.ts";
 export { EvalEngine, makeContext, registerStdlib }  from "./src/eval/mod.ts";
 export type {
   EvalContext, EvalThunk, ObjectAccessor, IEvalEngine,
-  FunctionImpl, CommandImpl, IterFrame,
+  FunctionImpl, CommandImpl, MushPlugin, IterFrame,
 }                                                   from "./src/eval/mod.ts";

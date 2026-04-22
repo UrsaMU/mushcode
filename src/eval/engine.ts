@@ -4,6 +4,7 @@ import type {
   EvalContext, EvalThunk,
   FunctionImpl, CommandImpl,
   ObjectAccessor, IEvalEngine,
+  MushPlugin,
   IterFrame, SubHandlerFn, CommandFallbackFn,
 } from "./context.ts";
 
@@ -70,6 +71,43 @@ export class EvalEngine implements IEvalEngine {
    */
   registerCommandFallback(fn: CommandFallbackFn): this {
     this.fallbackCommand = fn;
+    return this;
+  }
+
+  /**
+   * Install a {@link MushPlugin} into this engine.
+   *
+   * Applies registrations in order: functions → commands → subs → commandFallback.
+   * An existing registration with the same name is silently replaced by the
+   * plugin's entry.
+   *
+   * @returns `this` for chaining.
+   *
+   * @example
+   * ```ts
+   * import { rhostPlugin } from "@ursamu/mushcode/rhost";
+   * engine.use(rhostPlugin);
+   * ```
+   */
+  use(plugin: MushPlugin): this {
+    if (plugin.functions) {
+      for (const [name, impl] of Object.entries(plugin.functions)) {
+        this.registerFunction(name, impl);
+      }
+    }
+    if (plugin.commands) {
+      for (const [name, impl] of Object.entries(plugin.commands)) {
+        this.registerCommand(name, impl);
+      }
+    }
+    if (plugin.subs) {
+      for (const { match, fn } of plugin.subs) {
+        this.registerSub(match, fn);
+      }
+    }
+    if (plugin.commandFallback) {
+      this.registerCommandFallback(plugin.commandFallback);
+    }
     return this;
   }
 
