@@ -93,6 +93,7 @@ class EvalEngine implements IEvalEngine {
 
   evalString(source: string, ctx: EvalContext): Promise<string>
   eval(node: ASTNode, ctx: EvalContext): Promise<string>
+  evalShallow(node: ASTNode, ctx: EvalContext): Promise<string>
   exec(node: ASTNode, ctx: EvalContext): Promise<void>
 
   readonly accessor: ObjectAccessor
@@ -101,6 +102,7 @@ class EvalEngine implements IEvalEngine {
 
 - `evalString` parses the source string and evaluates it.
 - `eval` evaluates an already-parsed `ASTNode` to a string.
+- `evalShallow` evaluates an `ASTNode` but stops at `{braced strings}` — see below.
 - `exec` executes a command node for its side effects (returns nothing).
 
 Methods are chainable via `registerFunction` / `registerCommand` return `this`.
@@ -158,6 +160,174 @@ Call this once after creating your engine. You can add custom functions before
 or after calling it.
 
 See [stdlib.md](stdlib.md) for the full function reference.
+
+## `evalShallow(ast, ctx)`
+
+```typescript
+evalShallow(ast: ASTNode, ctx: EvalContext): Promise<string>
+```
+
+Like `eval()` but stops at `{braced strings}` — those are kept as literal text
+rather than being evaluated. `[...]` function-call blocks are still expanded
+normally.
+
+This mirrors how MUX itself evaluates an action attribute before routing it to
+a command handler: the server expands inline function calls but leaves braced
+arguments for the command to process later.
+
+```typescript
+import { parse } from "jsr:@ursamu/mushcode/parse";
+
+const ast    = parse("[add(1,2)] {literal}");
+const result = await engine.evalShallow(ast, ctx);
+console.log(result); // "3 {literal}"
+```
+
+Use `evalShallow` in `@command` dispatch: evaluate the full command string
+shallowly to resolve the command name and switch, then pass the brace-delimited
+argument text to the command handler verbatim.
+
+## Optional `ObjectAccessor` methods
+
+The four methods in the base interface (`getAttr`, `resolveTarget`, `getName`,
+`hasFlag`) are the only ones required to start evaluating softcode. A second set
+of optional methods unlocks additional stdlib functions. When a method is absent,
+the stdlib functions that depend on it return `""` or `#-1 NO MATCH` gracefully,
+so you can add them incrementally as your game grows.
+
+```typescript
+interface ObjectAccessor {
+  // --- required ---
+  getAttr(objectId: string, attr: string): Promise<string | null>;
+  resolveTarget(from: string, expr: string): Promise<string | null>;
+  getName(objectId: string): Promise<string>;
+  hasFlag(objectId: string, flag: string): Promise<boolean>;
+
+  // --- optional — unlock additional stdlib functions ---
+  getPronoun?(objectId: string, code: string): Promise<string | null> | string | null;
+  getMoniker?(objectId: string): Promise<string | null> | string | null;
+  getLocation?(id: string): Promise<string> | string;
+  getContents?(id: string, type?: string): Promise<string[]> | string[];
+  getConnectedPlayers?(): Promise<string[]> | string[];
+  getParentChain?(id: string): Promise<string[]> | string[];
+  findPlayer?(partial: string): Promise<string | null> | string | null;
+  listAttrs?(objectId: string, pattern?: string): Promise<string[]> | string[];
+  getType?(objectId: string): Promise<string> | string;
+  findObject?(from: string, expr: string): Promise<string | null> | string | null;
+}
+```
+
+| Method              | Unlocks                                      |
+|---------------------|----------------------------------------------|
+| `getPronoun`        | `%s`, `%o`, `%p`, `%a` pronoun substitutions |
+| `getMoniker`        | `moniker()` / colored name display           |
+| `getLocation`       | `loc()`, `%L` substitution                  |
+| `getContents`       | `con()`, `lcon()`                            |
+| `getConnectedPlayers` | `lwho()`, `conn()`, `doing()`              |
+| `getParentChain`    | `hasattr()` with inheritance, `u()` chain    |
+| `findPlayer`        | `pmatch()`, `locate()` player search         |
+| `listAttrs`         | `lattr()`, `lattrp()`                        |
+| `getType`           | `type()`, `istype()`                         |
+| `findObject`        | `num()`, extended `locate()`                 |
+
+## Pattern matching
+
+```typescript
+import { matchPattern, execPattern } from "jsr:@ursamu/mushcode/pattern";
+// or from the main entry point:
+import { matchPattern, execPattern } from "jsr:@ursamu/mushcode";
+```
+
+### `matchPattern(patternNode, input)`
+
+```typescript
+function matchPattern(patternNode: ASTNode, input: string): PatternMatch | null
+```
+
+Pure function. Tests `input` against a parsed `$pattern` node. Returns a
+`PatternMatch` if the input matches, or `null` if it does not.
+
+```typescript
+interface PatternMatch {
+  captures: string[]; // [0] = full match (%0), [1]–[9] = wildcard groups (%1–%9)
+}
+```
+
+```typescript
+import { parse } from "jsr:@ursamu/mushcode/parse";
+import { matchPattern } from "jsr:@ursamu/mushcode/pattern";
+
+const node  = parse("$+finger *", "DollarPattern");
+const match = matchPattern(node, "+finger Alice");
+// match.captures → ["+finger Alice", "Alice"]
+
+const miss = matchPattern(node, "+look here");
+// miss → null
+```
+
+### `execPattern(attrSource, input, ctx, engine)`
+
+```typescript
+function execPattern(
+  attrSource: string,
+  input:      string,
+  ctx:        EvalContext,
+  engine:     IEvalEngine,
+): Promise<string | null>
+```
+
+Full `$pattern:action` dispatch pipeline:
+
+1. Parses `attrSource` looking for a `$pattern:action` attribute value.
+2. Calls `matchPattern` against `input`.
+3. If the pattern matches, evaluates the action string with the wildcard captures
+   bound to `%0`–`%9` in a child context.
+4. Returns the evaluated result, or `null` if the pattern did not match.
+
+```typescript
+const result = await execPattern(
+  "$+finger *:@pemit %#=[u(me/FN_FINGER,%0)]",
+  "+finger Alice",
+  ctx,
+  engine,
+);
+// result → null (no return value from @pemit) or the evaluated pemit text
+```
+
+Typical use in a MU* server: scan all attributes on an object for `$` patterns
+and call `execPattern` on each one until a match is found.
+
+## `childIsolated` / `childShared`
+
+These helpers are exported from `./eval` for plugin authors implementing custom
+UDF-style functions.
+
+```typescript
+import { childIsolated, childShared } from "jsr:@ursamu/mushcode/eval";
+
+function childIsolated(ctx: EvalContext, overrides?: Partial<EvalContext>): EvalContext
+function childShared(ctx: EvalContext, overrides?: Partial<EvalContext>): EvalContext
+```
+
+- `childIsolated` — creates a child context with a **fresh** register map.
+  This is the semantics of `u()`: the called function starts with no `%q`
+  registers inherited from the caller.
+- `childShared` — creates a child context that **shares** the parent's register
+  map by reference. This is the semantics of `ulocal()`: registers set inside
+  the called function are visible to the caller after it returns.
+
+Both functions increment `ctx.depth` and copy all other fields. Pass `overrides`
+to set `args`, `executor`, or any other field at the same time.
+
+```typescript
+engine.registerFunction("myfunc", {
+  minArgs: 1, maxArgs: 1,
+  async exec(args, ctx, engine) {
+    const child = childIsolated(ctx, { args: args as string[] });
+    return engine.evalString("[add(%0,1)]", child);
+  },
+});
+```
 
 ## `FunctionImpl`
 

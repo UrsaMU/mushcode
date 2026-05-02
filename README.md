@@ -1,5 +1,7 @@
 # @ursamu/mushcode
 
+[![JSR version](https://jsr.io/badges/@ursamu/mushcode)](https://jsr.io/@ursamu/mushcode) v0.6.0
+
 A MUX/RhostMUSH softcode toolkit for Deno and JSR. Parses softcode into an AST,
 evaluates it, lints it for common mistakes, prints it back to canonical text, and
 extracts structural information from it.
@@ -21,6 +23,7 @@ Sub-path imports are available for tree-shaking:
 | `…/lint`                 | `lint`, `RULES`, `Diagnostic`, `Severity`, `LintOptions`, `RuleId`                        |
 | `…/analyze`              | `extractCommands`, `extractDeps`, `extractTagRefs`, `PatternEntry`, `DepEntry`             |
 | `…/eval`                 | `EvalEngine`, `makeContext`, `registerStdlib`, `ObjectAccessor`, `EvalContext`, and more   |
+| `…/pattern`              | `matchPattern`, `execPattern`, `PatternMatch`                                              |
 
 ## Quick start
 
@@ -93,6 +96,34 @@ registerStdlib(engine);
 const ctx    = makeContext({ enactor: "player-uuid", executor: "player-uuid" });
 const result = await engine.evalString("[add(1,2)] [capstr(hello)]", ctx);
 console.log(result); // "3 Hello"
+
+// evalShallow expands [...] but keeps {...} literal — useful for @command dispatch
+const ast     = parse("[add(1,2)] {literal}");
+const shallow = await engine.evalShallow(ast, ctx);
+console.log(shallow); // "3 {literal}"
+```
+
+### Pattern matching
+
+```typescript
+import { matchPattern, execPattern } from "jsr:@ursamu/mushcode/pattern";
+import { parse } from "jsr:@ursamu/mushcode/parse";
+
+// Pure pattern test
+const patternNode = parse("$+finger *", "DollarPattern");
+const match = matchPattern(patternNode, "+finger Alice");
+if (match) {
+  console.log(match.captures); // ["+finger Alice", "Alice"]
+}
+
+// Full $pattern:action dispatch pipeline
+// Reads attrSource for "$pattern:action", matches input, evaluates action with captures
+const result = await execPattern(
+  "$+finger *:@pemit %#=[u(me/FN_FINGER,%0)]",
+  "+finger Alice",
+  ctx,
+  engine,
+);
 ```
 
 ## Documentation
