@@ -236,8 +236,8 @@ describe("lint — options", () => {
 
 describe("arg-count — extraArities", () => {
   it("unknown function produces no diagnostic without extraArities", () => {
-    // vadd() is rhost-specific — invisible to the default linter
-    const ast = p("[vadd(1 2)]");
+    // mygamefunc() is a game-specific unknown function — invisible to the default linter
+    const ast = p("[mygamefunc(1 2)]");
     const diags = lint(ast, { rules: ["arg-count"] });
     assertEquals(diags.length, 0);
   });

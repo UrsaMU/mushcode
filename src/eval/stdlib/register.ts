@@ -28,4 +28,21 @@ export const registerFunctions: Record<string, FunctionImpl> = {
       return val;
     },
   },
+
+  /** unsetq(reg1[, reg2, …]) — delete one or more Q-registers; returns "". */
+  unsetq: {
+    minArgs: 1, maxArgs: Infinity,
+    exec(args, ctx) {
+      for (const reg of args as string[]) ctx.registers.delete(reg);
+      return "";
+    },
+  },
+
+  /** listq() — space-separated sorted list of currently-set Q-register names. */
+  listq: {
+    minArgs: 0, maxArgs: 0,
+    exec(_args, ctx) {
+      return [...ctx.registers.keys()].sort().join(" ");
+    },
+  },
 };

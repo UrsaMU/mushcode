@@ -17,9 +17,8 @@ function joinDelim(items: string[], delim: string): string {
   return items.join(delim);
 }
 
-/** TinyMUX truthiness: non-empty, non-"0", non-"#-1" strings. */
 function isTruthy(s: string): boolean {
-  return s !== "" && s !== "0" && !s.startsWith("#-1");
+  return s !== "" && s !== "0";
 }
 
 // ── Iter / list functions ─────────────────────────────────────────────────────
@@ -102,9 +101,33 @@ export const iterFunctions: Record<string, FunctionImpl> = {
   },
 
   /**
-   * map(list, fn[, idelim[, odelim]])
-   * Lazy. Evaluates fn for each item with ## bound to the item and #@ to its 1-based index.
+   * foreach(str, fn [,start_delim] [,end_delim]) — LAZY
+   * Apply fn to each CHARACTER of str, concatenate results.
+   * ## is bound to the current character (TinyMUX semantics: iterates chars, not words).
+   *
+   * Note: start_delim / end_delim in TinyMUX are used to identify the
+   * expression boundaries within fn, not input delimiters. We accept them
+   * for compatibility but ignore them (our parser handles brackets natively).
    */
+  foreach: {
+    eval: "lazy",
+    minArgs: 2, maxArgs: 4,
+    async exec(args, ctx) {
+      const thunks = args as EvalThunk[];
+      const str    = await thunks[0]();
+      const fn     = thunks[1];
+      // thunks[2] and thunks[3] are start/end delimiters — accepted but unused
+      if (!str) return "";
+      const chars = [...str]; // unicode-safe split
+      const results: string[] = [];
+      for (let i = 0; i < chars.length; i++) {
+        const frame: IterFrame = { item: chars[i], index: i + 1 };
+        results.push(await fn({ iterStack: [frame, ...ctx.iterStack] }));
+      }
+      return results.join("");
+    },
+  },
+
   map: {
     eval: "lazy",
     minArgs: 2, maxArgs: 4,
@@ -114,10 +137,8 @@ export const iterFunctions: Record<string, FunctionImpl> = {
       const body     = thunks[1];
       const inDelim  = thunks[2] ? ((await thunks[2]()) || " ") : " ";
       const outDelim = thunks[3] ? (await thunks[3]())          : " ";
-
       const items = splitDelim(list, inDelim);
       if (items.length === 0) return "";
-
       const results: string[] = [];
       for (let i = 0; i < items.length; i++) {
         const frame: IterFrame = { item: items[i], index: i + 1 };
@@ -127,10 +148,6 @@ export const iterFunctions: Record<string, FunctionImpl> = {
     },
   },
 
-  /**
-   * filter(list, fn[, idelim[, odelim]])
-   * Lazy. Keeps items for which fn evaluates to truthy.
-   */
   filter: {
     eval: "lazy",
     minArgs: 2, maxArgs: 4,
@@ -140,10 +157,8 @@ export const iterFunctions: Record<string, FunctionImpl> = {
       const body     = thunks[1];
       const inDelim  = thunks[2] ? ((await thunks[2]()) || " ") : " ";
       const outDelim = thunks[3] ? (await thunks[3]())          : " ";
-
       const items = splitDelim(list, inDelim);
       if (items.length === 0) return "";
-
       const kept: string[] = [];
       for (let i = 0; i < items.length; i++) {
         const frame: IterFrame = { item: items[i], index: i + 1 };
@@ -151,46 +166,6 @@ export const iterFunctions: Record<string, FunctionImpl> = {
         if (isTruthy(result)) kept.push(items[i]);
       }
       return joinDelim(kept, outDelim);
-    },
-  },
-
-  /**
-   * ilist([start,] end[, step]) — generate integer list.
-   * 1 arg: ilist(5) → "1 2 3 4 5"
-   * 2 args: ilist(3,7) → "3 4 5 6 7"
-   * 3 args: ilist(1,10,3) → "1 4 7 10"
-   */
-  ilist: {
-    minArgs: 1, maxArgs: 3,
-    exec(args) {
-      const strs = args as string[];
-      let start: number, end: number, step: number;
-
-      if (strs.length === 1) {
-        start = 1;
-        end   = parseInt(strs[0], 10);
-        step  = 1;
-      } else if (strs.length === 2) {
-        start = parseInt(strs[0], 10);
-        end   = parseInt(strs[1], 10);
-        step  = 1;
-      } else {
-        start = parseInt(strs[0], 10);
-        end   = parseInt(strs[1], 10);
-        step  = parseInt(strs[2], 10);
-      }
-
-      if (!isFinite(start) || !isFinite(end) || !isFinite(step))
-        return "#-1 ARGUMENT IS NOT A NUMBER";
-      if (step <= 0)
-        return "#-1 ARGUMENT OUT OF RANGE";
-
-      const results: number[] = [];
-      for (let n = start; n <= end; n += step) {
-        results.push(n);
-        if (results.length > 10000) return "#-1 ARGUMENT OUT OF RANGE";
-      }
-      return results.join(" ");
     },
   },
 };
