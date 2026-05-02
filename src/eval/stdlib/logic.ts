@@ -1,11 +1,11 @@
 import type { EvalThunk, FunctionImpl } from "../context.ts";
 
 /**
- * TinyMUX truthiness: a string is falsy if it is "", "0", "#-1",
- * or begins with "#-1 " (error prefix).  Everything else is truthy.
+ * TinyMUX truthiness: a string is falsy only if it is "" or "0".
+ * Error strings like "#-1" are truthy — they are non-empty and non-zero.
  */
 function truthy(s: string): boolean {
-  return s !== "" && s !== "0" && s !== "#-1" && !s.startsWith("#-1 ");
+  return s !== "" && s !== "0";
 }
 
 export const logicFunctions: Record<string, FunctionImpl> = {

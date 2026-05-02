@@ -137,11 +137,11 @@ describe("lazy eval — iter()", () => {
 // ── TinyMUX truthiness ────────────────────────────────────────────────────────
 
 describe("TinyMUX truthiness", () => {
-  it("#-1 is falsy", async () =>
-    assertEquals(await ev("[if(#-1,yes,no)]"), "no"));
+  it("#-1 is truthy — error strings are non-empty, non-zero", async () =>
+    assertEquals(await ev("[if(#-1,yes,no)]"), "yes"));
 
-  it("#-1 ERROR prefix is falsy", async () =>
-    assertEquals(await ev("[if(#-1 NO MATCH,yes,no)]"), "no"));
+  it("#-1 NO MATCH is truthy — error prefix is still truthy", async () =>
+    assertEquals(await ev("[if(#-1 NO MATCH,yes,no)]"), "yes"));
 
   it("empty string is falsy", async () =>
     assertEquals(await ev("[if(,yes,no)]"), "no"));
@@ -153,31 +153,34 @@ describe("TinyMUX truthiness", () => {
     assertEquals(await ev("[if(42,yes,no)]"), "yes"));
 });
 
-// ── Register scoping — u() shares, ulocal() isolates ─────────────────────────
+// ── Register scoping — u() isolates, ulocal() shares ─────────────────────────
+// TinyMUX semantics: u() gives a fresh register context (caller's regs not
+// visible, setq inside does NOT write back).  ulocal() shares the parent's
+// register map so setq() inside IS visible to the caller after return.
 
 describe("register scoping — u()", () => {
-  it("setq inside u() is visible to caller after u() returns", async () => {
-    // FN_SETQ = "[setq(0,inside)]"
+  it("setq inside u() is NOT visible to caller (fresh register context)", async () => {
+    // FN_SETQ = "[setq(0,inside)]" — u() gets fresh registers, nothing leaks
     const result = await ev("[u(me/FN_SETQ)][r(0)]");
-    assertEquals(result, "inside");
+    assertEquals(result, "");
   });
 
-  it("pre-set register is preserved and updated by u()", async () => {
+  it("pre-set register is preserved — u() cannot overwrite caller's regs", async () => {
     const result = await ev("[setq(0,before)][u(me/FN_SETQ)][r(0)]");
-    assertEquals(result, "inside");
+    assertEquals(result, "before");
   });
 });
 
 describe("register scoping — ulocal()", () => {
-  it("setq inside ulocal() is NOT visible to caller after ulocal() returns", async () => {
+  it("setq inside ulocal() IS visible to caller after ulocal() returns", async () => {
     // FN_SETQ = "[setq(0,inside)]"
     const result = await ev("[setq(0,outer)][ulocal(me/FN_SETQ)][r(0)]");
-    assertEquals(result, "outer");
+    assertEquals(result, "inside");
   });
 
-  it("ulocal: register starts empty before call, still empty after", async () => {
+  it("ulocal: register empty before call, set by callee, visible after", async () => {
     const result = await ev("[ulocal(me/FN_SETQ)][r(0)]");
-    assertEquals(result, "");
+    assertEquals(result, "inside");
   });
 });
 

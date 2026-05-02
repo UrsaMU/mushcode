@@ -95,10 +95,13 @@ export const dbFunctions: Record<string, FunctionImpl> = {
       const attrVal = await engine.accessor.getAttr(objId, attrName.toUpperCase());
       if (attrVal === null) return "#-1 NO SUCH ATTRIBUTE";
 
-      const subCtx = childShared(ctx, {
-        executor: objId,
-        caller:   ctx.executor,
-        args:     argVals,
+      // TinyMUX u(): fresh register context — caller's registers not visible,
+      // setq() inside does not propagate back to caller.
+      const subCtx = childIsolated(ctx, {
+        executor:  objId,
+        caller:    ctx.executor,
+        args:      argVals,
+        registers: new Map(),
       });
 
       return engine.evalString(attrVal, subCtx);
@@ -106,9 +109,9 @@ export const dbFunctions: Record<string, FunctionImpl> = {
   },
 
   /**
-   * ulocal(obj/attr[, arg0, arg1, …]) — like u(), but the child frame gets a
-   * **copy** of the parent's registers.  Mutations do not propagate back to
-   * the caller.
+   * ulocal(obj/attr[, arg0, arg1, …]) — like u() but inherits AND shares back
+   * the parent's register map.  setq() inside is visible to the caller.
+   * Use when a UDF needs to communicate results via q-registers.
    */
   ulocal: {
     minArgs: 1, maxArgs: Infinity,
@@ -126,7 +129,8 @@ export const dbFunctions: Record<string, FunctionImpl> = {
       const attrVal = await engine.accessor.getAttr(objId, attrName.toUpperCase());
       if (attrVal === null) return "#-1 NO SUCH ATTRIBUTE";
 
-      const subCtx = childIsolated(ctx, {
+      // ulocal(): shares parent register map — mutations propagate back.
+      const subCtx = childShared(ctx, {
         executor: objId,
         caller:   ctx.executor,
         args:     argVals,

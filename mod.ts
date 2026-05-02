@@ -62,3 +62,7 @@ export type {
   EvalContext, EvalThunk, ObjectAccessor, IEvalEngine,
   FunctionImpl, CommandImpl, MushPlugin, IterFrame,
 }                                                   from "./src/eval/mod.ts";
+
+// ── Pattern ───────────────────────────────────────────────────────────────────
+export { matchPattern, execPattern }                from "./src/pattern/mod.ts";
+export type { PatternMatch }                        from "./src/pattern/mod.ts";

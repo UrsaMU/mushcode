@@ -10,7 +10,8 @@
     "./print":     "./src/print/mod.ts",
     "./lint":      "./src/lint/mod.ts",
     "./analyze":   "./src/analyze/mod.ts",
-    "./eval":      "./src/eval/mod.ts"
+    "./eval":      "./src/eval/mod.ts",
+    "./pattern":   "./src/pattern/mod.ts"
   },
   "tasks": {
     "test":  "deno test --allow-read tests/",

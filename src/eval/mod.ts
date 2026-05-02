@@ -30,3 +30,6 @@ export type {
   MushPlugin,
   IterFrame, SubHandlerFn, CommandFallbackFn,
 }                              from "./context.ts";
+
+export { matchPattern, execPattern } from "../pattern/mod.ts";
+export type { PatternMatch }         from "../pattern/mod.ts";
