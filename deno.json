@@ -14,7 +14,8 @@
     "./pattern":   "./src/pattern/mod.ts"
   },
   "tasks": {
-    "test":  "deno test --allow-read tests/",
+    "test":  "deno test --allow-read tests/ --ignore=tests/lint.test.ts",
+    "test:full": "deno test --allow-read tests/",
     "build": "npx peggy --format es --allowed-start-rules Start,LockExpr -o parser/mux-softcode.mjs grammar/mux-softcode.pegjs && npx peggy --allowed-start-rules Start,LockExpr -o parser/mux-softcode.js grammar/mux-softcode.pegjs"
   },
   "lint": {
