@@ -2,7 +2,7 @@
 // 02 — % substitution codes
 // ============================================================================
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertNotEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { mustParse, substitutions, findAll } from "./helpers.ts";
 
@@ -123,6 +123,11 @@ describe("ANSI angle-bracket color specs", () => {
 describe("%=attr substitution (attribute value by name)", () => {
   it("%=SCORE reads SCORE attribute",  () => assertEquals(sub("=SCORE"), "=SCORE"));
   it("%=MY_ATTR reads MY_ATTR",        () => assertEquals(sub("=MY_ATTR"), "=MY_ATTR"));
+});
+
+describe("Literal punctuation escapes (Phase 2)", () => {
+  it("%(  → literal (",  () => assertEquals(sub("("),  "("));
+  it("%)  → literal )",  () => assertEquals(sub(")"),  ")"));
 });
 
 describe("Substitution embedded in text", () => {

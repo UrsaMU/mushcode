@@ -6,6 +6,7 @@ import { logicFunctions }    from "./logic.ts";
 import { registerFunctions } from "./register.ts";
 import { iterFunctions }     from "./iter.ts";
 import { dbFunctions }       from "./db.ts";
+import { listFunctions }     from "./list.ts";
 
 /** Register the full standard softcode function library on an engine. */
 export function registerStdlib(engine: IEvalEngine): void {
@@ -16,4 +17,5 @@ export function registerStdlib(engine: IEvalEngine): void {
   for (const [n, impl] of Object.entries(registerFunctions))engine.registerFunction(n, impl);
   for (const [n, impl] of Object.entries(iterFunctions))    engine.registerFunction(n, impl);
   for (const [n, impl] of Object.entries(dbFunctions))      engine.registerFunction(n, impl);
+  for (const [n, impl] of Object.entries(listFunctions))    engine.registerFunction(n, impl);
 }

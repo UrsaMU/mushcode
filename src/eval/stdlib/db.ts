@@ -1,4 +1,5 @@
-import type { EvalContext, FunctionImpl } from "../context.ts";
+import type { EvalContext, FunctionImpl, ObjectAccessor } from "../context.ts";
+import { childShared, childIsolated } from "../context.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,13 +73,18 @@ export const dbFunctions: Record<string, FunctionImpl> = {
    *
    * When "obj/" is omitted, the executor is used as the target object.
    */
+  /**
+   * u(obj/attr[, arg0, arg1, …]) — evaluate an attribute as a function.
+   *
+   * The child frame **shares** the parent's q-register map, so setq() calls
+   * inside the attribute are visible to the caller after u() returns.
+   */
   u: {
     minArgs: 1, maxArgs: Infinity,
     async exec(args, ctx, engine) {
       const [target, ...argVals] = args as string[];
 
-      // Resolve object and attribute name
-      const pair = splitObjAttr(target);
+      const pair    = splitObjAttr(target);
       const objId   = pair
         ? await engine.accessor.resolveTarget(ctx.enactor, pair[0])
         : ctx.executor;
@@ -89,16 +95,161 @@ export const dbFunctions: Record<string, FunctionImpl> = {
       const attrVal = await engine.accessor.getAttr(objId, attrName.toUpperCase());
       if (attrVal === null) return "#-1 NO SUCH ATTRIBUTE";
 
-      const subCtx: EvalContext = {
-        ...ctx,
-        executor:  objId,
-        caller:    ctx.executor,
-        args:      argVals,
-        registers: new Map(),
-        depth:     ctx.depth + 1,
-      };
+      const subCtx = childShared(ctx, {
+        executor: objId,
+        caller:   ctx.executor,
+        args:     argVals,
+      });
 
       return engine.evalString(attrVal, subCtx);
+    },
+  },
+
+  /**
+   * ulocal(obj/attr[, arg0, arg1, …]) — like u(), but the child frame gets a
+   * **copy** of the parent's registers.  Mutations do not propagate back to
+   * the caller.
+   */
+  ulocal: {
+    minArgs: 1, maxArgs: Infinity,
+    async exec(args, ctx, engine) {
+      const [target, ...argVals] = args as string[];
+
+      const pair    = splitObjAttr(target);
+      const objId   = pair
+        ? await engine.accessor.resolveTarget(ctx.enactor, pair[0])
+        : ctx.executor;
+      const attrName = pair ? pair[1] : target;
+
+      if (!objId) return "#-1 NO MATCH";
+
+      const attrVal = await engine.accessor.getAttr(objId, attrName.toUpperCase());
+      if (attrVal === null) return "#-1 NO SUCH ATTRIBUTE";
+
+      const subCtx = childIsolated(ctx, {
+        executor: objId,
+        caller:   ctx.executor,
+        args:     argVals,
+      });
+
+      return engine.evalString(attrVal, subCtx);
+    },
+  },
+
+  /** v(attr) — read attribute from the executor (shorthand for get(%!/attr)). */
+  v: {
+    minArgs: 1, maxArgs: 1,
+    async exec(args, ctx, engine) {
+      const attr = (args as string[])[0];
+      return (await engine.accessor.getAttr(ctx.executor, attr.toUpperCase())) ?? "";
+    },
+  },
+
+  /** isnum(string) — "1" if valid number, "0" otherwise. */
+  isnum: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) {
+      const s = (args as string[])[0].trim();
+      return (s !== "" && isFinite(Number(s))) ? "1" : "0";
+    },
+  },
+
+  /** isdbref(string) — "1" if matches #N where N is non-negative integer. */
+  isdbref: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) {
+      return /^#\d+$/.test((args as string[])[0]) ? "1" : "0";
+    },
+  },
+
+  /** null(args...) — evaluates all args, returns "". */
+  null: {
+    minArgs: 0, maxArgs: Infinity,
+    exec() { return ""; },
+  },
+
+  /** noop(args...) — alias for null. */
+  noop: {
+    minArgs: 0, maxArgs: Infinity,
+    exec() { return ""; },
+  },
+
+  /** pmatch(name) — partial player name match. */
+  pmatch: {
+    minArgs: 1, maxArgs: 1,
+    async exec(args, _ctx, engine) {
+      const partial = (args as string[])[0];
+      const acc = engine.accessor as ObjectAccessor;
+      if (!acc.findPlayer) return "#-1 NO MATCH";
+      const result = await acc.findPlayer(partial);
+      if (!result) return "#-1 NO MATCH";
+      return result;
+    },
+  },
+
+  /** loc(object) — return location dbref. */
+  loc: {
+    minArgs: 1, maxArgs: 1,
+    async exec(args, ctx, engine) {
+      const acc = engine.accessor as ObjectAccessor;
+      if (!acc.getLocation) return "#-1 FUNCTION (LOC) REQUIRES OBJECT ACCESSOR";
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, (args as string[])[0]);
+      if (!objId) return "#-1 NO MATCH";
+      return await acc.getLocation(objId);
+    },
+  },
+
+  /** lcon(object[, type]) — return space-separated list of contents. */
+  lcon: {
+    minArgs: 1, maxArgs: 2,
+    async exec(args, ctx, engine) {
+      const acc = engine.accessor as ObjectAccessor;
+      if (!acc.getContents) return "#-1 FUNCTION (LCON) REQUIRES OBJECT ACCESSOR";
+      const [objExpr, type] = args as string[];
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, objExpr);
+      if (!objId) return "#-1 NO MATCH";
+      const contents = await acc.getContents(objId, type?.toUpperCase());
+      return contents.join(" ");
+    },
+  },
+
+  /** lwho() — return space-separated list of connected player dbrefs. */
+  lwho: {
+    minArgs: 0, maxArgs: 1,
+    async exec(_args, _ctx, engine) {
+      const acc = engine.accessor as ObjectAccessor;
+      if (!acc.getConnectedPlayers) return "#-1 FUNCTION (LWHO) REQUIRES OBJECT ACCESSOR";
+      const players = await acc.getConnectedPlayers();
+      return players.join(" ");
+    },
+  },
+
+  /** lparent(object) — return space-separated parent chain. */
+  lparent: {
+    minArgs: 1, maxArgs: 1,
+    async exec(args, ctx, engine) {
+      const acc = engine.accessor as ObjectAccessor;
+      if (!acc.getParentChain) return "#-1 FUNCTION (LPARENT) REQUIRES OBJECT ACCESSOR";
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, (args as string[])[0]);
+      if (!objId) return "#-1 NO MATCH";
+      const chain = await acc.getParentChain(objId);
+      return chain.join(" ");
+    },
+  },
+
+  /** ansi(code, text[, code, text...]) — wrap text in ANSI formatting codes. */
+  ansi: {
+    minArgs: 2, maxArgs: Infinity,
+    exec(args) {
+      const strs = args as string[];
+      if (strs.length % 2 !== 0) strs.push("");
+      let result = "";
+      for (let i = 0; i < strs.length; i += 2) {
+        const code = strs[i].toLowerCase();
+        const text = strs[i + 1];
+        result += `%c${code}${text}%cn`;
+      }
+      return result;
     },
   },
 };

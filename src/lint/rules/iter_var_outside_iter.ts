@@ -2,12 +2,13 @@ import type { ASTNode }  from "../../../parser/mod.ts";
 import type { Diagnostic } from "../mod.ts";
 import { walk }             from "../../traverse/walk.ts";
 
-const ITER_VARS = new Set(["##", "#@", "#$"]);
+// #$ (last name-lookup dbref) is valid anywhere — not an iter-only variable.
+const ITER_VARS = new Set(["##", "#@"]);
 
 /**
  * iter-var-outside-iter
  *
- * Reports when ##, #@, or #$ (iteration SpecialVars) appear outside an
+ * Reports when ## or #@ (iteration SpecialVars) appear outside an
  * iter() function call or @dolist command, where they have no defined value.
  *
  * Valid contexts:

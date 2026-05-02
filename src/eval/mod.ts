@@ -20,8 +20,8 @@
  * console.log(result); // "3 Hello"
  * ```
  */
-export { EvalEngine }          from "./engine.ts";
-export { makeContext }         from "./context.ts";
+export { EvalEngine }                      from "./engine.ts";
+export { makeContext, childShared, childIsolated } from "./context.ts";
 export { registerStdlib }      from "./stdlib/mod.ts";
 export type {
   EvalContext, EvalThunk,

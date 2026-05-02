@@ -27,7 +27,7 @@ import {
 
 /** Union of every node `type` string the parser can produce. */
 export type NodeType =
-  | "Literal" | "Escape" | "Substitution" | "SpecialVar" | "Wildcard"
+  | "Literal" | "Escape" | "Substitution" | "SpecialVar" | "Wildcard" | "CharClass"
   | "EvalBlock" | "BracedString" | "Text" | "Arg"
   | "FunctionCall" | "DollarPattern" | "ListenPattern"
   | "PatternAlts" | "Pattern"

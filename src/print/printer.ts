@@ -76,6 +76,9 @@ function printNode(node: ASTNode, opts?: PrintOptions): string {
     case "Wildcard":
       return n.wildcard as string;   // "*" or "?"
 
+    case "CharClass":
+      return "[" + (n.spec as string) + "]";
+
     // ── Expression containers ─────────────────────────────────────────────────
 
     case "EvalBlock":

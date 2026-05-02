@@ -56,7 +56,8 @@ export { extractCommands, extractDeps, extractTagRefs }
 export type { PatternEntry, DepEntry }              from "./src/analyze/mod.ts";
 
 // ── Eval ──────────────────────────────────────────────────────────────────────
-export { EvalEngine, makeContext, registerStdlib }  from "./src/eval/mod.ts";
+export { EvalEngine, makeContext, registerStdlib, childShared, childIsolated }
+                                                    from "./src/eval/mod.ts";
 export type {
   EvalContext, EvalThunk, ObjectAccessor, IEvalEngine,
   FunctionImpl, CommandImpl, MushPlugin, IterFrame,

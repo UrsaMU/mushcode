@@ -57,6 +57,18 @@ export interface EvalContext {
   maxOutputLen: number;
   /** Optional cancellation signal */
   signal?:   AbortSignal;
+  /**
+   * Optional command-context data for %w, %W, %+, %| substitutions.
+   * Provided by the host when evaluating commands triggered from input.
+   */
+  commandContext?: {
+    /** Last bare command entered (%w lowercase, %W uppercase) */
+    lastCommand?: string;
+    /** Last command arguments (%+ in command-context meaning) */
+    lastArgs?: string;
+    /** Output of the previous piped command (%|) */
+    pipedOutput?: string;
+  };
 }
 
 /**
@@ -81,6 +93,40 @@ export function makeContext(
     maxDepth:     100,
     maxOutputLen: 65_536,
     ...partial,
+  };
+}
+
+/**
+ * Create a child frame that **shares** the parent's register map.
+ * Any `setq()` calls inside the child are visible to the parent after the
+ * child returns.  Used by `u()`.
+ */
+export function childShared(
+  parent: EvalContext,
+  overrides: Partial<EvalContext> = {},
+): EvalContext {
+  return {
+    ...parent,
+    depth: parent.depth + 1,
+    ...overrides,
+    // registers intentionally NOT overridden here — shared by reference
+    registers: overrides.registers ?? parent.registers,
+  };
+}
+
+/**
+ * Create a child frame with a **deep copy** of the parent's register map.
+ * Mutations inside the child do not affect the parent.  Used by `ulocal()`.
+ */
+export function childIsolated(
+  parent: EvalContext,
+  overrides: Partial<EvalContext> = {},
+): EvalContext {
+  return {
+    ...parent,
+    depth: parent.depth + 1,
+    registers: new Map(parent.registers),
+    ...overrides,
   };
 }
 
@@ -109,6 +155,27 @@ export interface ObjectAccessor {
   getName(objectId: string): Promise<string>;
   /** Return `true` if the object has the named flag. */
   hasFlag(objectId: string, flag: string): Promise<boolean>;
+  /**
+   * Return a pronoun for the object.
+   * `code` is the lower-case substitution letter: "s", "o", "p", or "a".
+   * Returns `null` (or undefined) to fall back to empty string.
+   */
+  getPronoun?(objectId: string, code: string): Promise<string | null> | string | null;
+  /**
+   * Return the moniker (decorated/accented name) for the object, or `null` to
+   * fall back to the plain name.
+   */
+  getMoniker?(objectId: string): Promise<string | null> | string | null;
+  /** Return the location dbref of an object, or `""` if unknown. */
+  getLocation?(id: string): Promise<string> | string;
+  /** Return a list of dbref strings for the contents of an object. Optional type filter. */
+  getContents?(id: string, type?: string): Promise<string[]> | string[];
+  /** Return a list of dbref strings for all connected players. */
+  getConnectedPlayers?(): Promise<string[]> | string[];
+  /** Return the parent chain of an object (object first, then parents). */
+  getParentChain?(id: string): Promise<string[]> | string[];
+  /** Partial-name player lookup. Returns dbref string, null (no match), or "#-2 MULTIPLE MATCHES". */
+  findPlayer?(partial: string): Promise<string | null> | string | null;
 }
 
 // ── Function and command registrations ───────────────────────────────────────
@@ -226,6 +293,11 @@ export interface IEvalEngine {
   use(plugin: MushPlugin): this;
   /** Evaluate an AST node to a string. */
   eval(node: ASTNode, ctx: EvalContext): Promise<string>;
+  /**
+   * Shallow-evaluate a node: expand `[...]` and `%x` normally, but leave
+   * `{...}` as literal braced text for the dispatcher to re-evaluate.
+   */
+  evalShallow(node: ASTNode, ctx: EvalContext): Promise<string>;
   /** Execute a node for its side effects (commands). */
   exec(node: ASTNode, ctx: EvalContext): Promise<void>;
   /** Parse and evaluate a raw softcode string. */

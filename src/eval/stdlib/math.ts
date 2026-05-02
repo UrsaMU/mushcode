@@ -112,4 +112,136 @@ export const mathFunctions: Record<string, FunctionImpl> = {
       return fmt(Math.sqrt(n));
     },
   },
+
+  sign: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) {
+      const n = toNum((args as string[])[0]);
+      return String(Math.sign(n));
+    },
+  },
+
+  log: {
+    minArgs: 1, maxArgs: 2,
+    exec(args) {
+      const [nStr, baseStr] = args as string[];
+      const n = toNum(nStr);
+      if (n <= 0) throw new Error("LOG OF ZERO");
+      if (baseStr !== undefined) {
+        const base = toNum(baseStr);
+        if (base <= 0 || base === 1) throw new Error("ARGUMENT OUT OF RANGE");
+        return fmt(Math.log(n) / Math.log(base));
+      }
+      return fmt(Math.log10(n));
+    },
+  },
+
+  ln: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) {
+      const n = toNum((args as string[])[0]);
+      if (n <= 0) throw new Error("LOG OF ZERO");
+      return fmt(Math.log(n));
+    },
+  },
+
+  exp: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) {
+      return fmt(Math.exp(toNum((args as string[])[0])));
+    },
+  },
+
+  sin: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) { return fmt(Math.sin(toNum((args as string[])[0]))); },
+  },
+
+  cos: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) { return fmt(Math.cos(toNum((args as string[])[0]))); },
+  },
+
+  tan: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) { return fmt(Math.tan(toNum((args as string[])[0]))); },
+  },
+
+  atan: {
+    minArgs: 1, maxArgs: 2,
+    exec(args) {
+      const [yStr, xStr] = args as string[];
+      if (xStr !== undefined) {
+        return fmt(Math.atan2(toNum(yStr), toNum(xStr)));
+      }
+      return fmt(Math.atan(toNum(yStr)));
+    },
+  },
+
+  pi: {
+    minArgs: 0, maxArgs: 0,
+    exec() { return "3.141592653589793"; },
+  },
+
+  e: {
+    minArgs: 0, maxArgs: 0,
+    exec() { return "2.718281828459045"; },
+  },
+
+  bound: {
+    minArgs: 3, maxArgs: 3,
+    exec(args) {
+      const [nStr, lowStr, highStr] = args as string[];
+      const n   = toNum(nStr);
+      const low = toNum(lowStr);
+      const hi  = toNum(highStr);
+      return fmt(Math.min(Math.max(n, low), hi));
+    },
+  },
+
+  between: {
+    minArgs: 3, maxArgs: 3,
+    exec(args) {
+      const [nStr, lowStr, highStr] = args as string[];
+      const n   = toNum(nStr);
+      const low = toNum(lowStr);
+      const hi  = toNum(highStr);
+      return (n >= low && n <= hi) ? "1" : "0";
+    },
+  },
+
+  fdiv: {
+    minArgs: 2, maxArgs: 2,
+    exec(args) {
+      const [a, b] = args as string[];
+      const nb = toNum(b);
+      if (nb === 0) throw new Error("DIVIDE BY ZERO");
+      return fmt(toNum(a) / nb);
+    },
+  },
+
+  fmod: {
+    minArgs: 2, maxArgs: 2,
+    exec(args) {
+      const [a, b] = args as string[];
+      const nb = toNum(b);
+      if (nb === 0) throw new Error("DIVIDE BY ZERO");
+      return fmt(toNum(a) % nb);
+    },
+  },
+
+  trunc: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) { return String(Math.trunc(toNum((args as string[])[0]))); },
+  },
+
+  inc: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) { return fmt(toNum((args as string[])[0]) + 1); },
+  },
+
+  dec: {
+    minArgs: 1, maxArgs: 1,
+    exec(args) { return fmt(toNum((args as string[])[0]) - 1); },
+  },
 };

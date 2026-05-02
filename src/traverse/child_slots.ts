@@ -4,8 +4,8 @@
 // Used by walk() and transform() to know exactly which fields hold child nodes,
 // whether each field is a single node (possibly null) or an array of nodes.
 //
-// Leaf types (Literal, Escape, Substitution, SpecialVar, Wildcard, TagRef,
-// LockMe, LockDbref, LockFlagCheck, LockTypeCheck, LockAttrCheck,
+// Leaf types (Literal, Escape, Substitution, SpecialVar, Wildcard, CharClass,
+// TagRef, LockMe, LockDbref, LockFlagCheck, LockTypeCheck, LockAttrCheck,
 // LockPlayerName) have no entry — the walker treats missing entries as leaves.
 // ============================================================================
 
@@ -46,6 +46,6 @@ export const CHILD_SLOTS: Readonly<Record<string, SlotDef[]>> = {
   LockNot:       [{ field: "operand",   kind: "single" }],
 
   // Leaf types (no entry): Literal, Escape, Substitution, SpecialVar, Wildcard,
-  // TagRef, LockMe, LockDbref, LockFlagCheck, LockTypeCheck, LockAttrCheck,
-  // LockPlayerName
+  // CharClass, TagRef, LockMe, LockDbref, LockFlagCheck, LockTypeCheck,
+  // LockAttrCheck, LockPlayerName
 };

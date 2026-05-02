@@ -1,8 +1,11 @@
 import type { EvalThunk, FunctionImpl } from "../context.ts";
 
-/** MUX truthiness: empty string and "0" are false; everything else is true. */
+/**
+ * TinyMUX truthiness: a string is falsy if it is "", "0", "#-1",
+ * or begins with "#-1 " (error prefix).  Everything else is truthy.
+ */
 function truthy(s: string): boolean {
-  return s !== "" && s !== "0";
+  return s !== "" && s !== "0" && s !== "#-1" && !s.startsWith("#-1 ");
 }
 
 export const logicFunctions: Record<string, FunctionImpl> = {
@@ -59,15 +62,39 @@ export const logicFunctions: Record<string, FunctionImpl> = {
     },
   },
 
-  /** or(v1, v2, …) — short-circuit, returns "1" or "0". */
+  /**
+   * or(v1, v2, …) — short-circuit.
+   * Returns the first truthy value found, or "0" if none are truthy.
+   */
   "or": {
     eval: "lazy",
     minArgs: 2, maxArgs: Infinity,
     async exec(args) {
       for (const thunk of args as EvalThunk[]) {
-        if (truthy(await thunk())) return "1";
+        const val = await thunk();
+        if (truthy(val)) return val;
       }
       return "0";
+    },
+  },
+
+  /**
+   * cond(cond1, val1[, cond2, val2, …[, default]])
+   * Evaluate condition/value pairs in order; return the value of the first
+   * truthy condition.  If none match and a default is present (odd number of
+   * args), return the default; otherwise return "".
+   */
+  "cond": {
+    eval: "lazy",
+    minArgs: 2, maxArgs: Infinity,
+    async exec(args) {
+      const thunks = args as EvalThunk[];
+      const hasDefault = thunks.length % 2 === 1;
+      const pairs = hasDefault ? thunks.slice(0, -1) : thunks;
+      for (let i = 0; i < pairs.length; i += 2) {
+        if (truthy(await pairs[i]())) return await pairs[i + 1]();
+      }
+      return hasDefault ? await thunks[thunks.length - 1]() : "";
     },
   },
 

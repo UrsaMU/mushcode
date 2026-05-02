@@ -14,7 +14,7 @@
 //   parser.parse('$+finger *:@pemit %#=[u(me/FN_FINGER,%0)]');
 //
 // AST node types:
-//   AttributeValue  DollarPattern  ListenPattern  PatternAlts  Pattern  Wildcard
+//   AttributeValue  DollarPattern  ListenPattern  PatternAlts  Pattern  Wildcard  CharClass
 //   CommandList     AtCommand      AttributeSet   UserCommand
 //   EvalBlock       FunctionCall   Arg
 //   BracedString    Text
@@ -159,10 +159,26 @@ SinglePattern
     }
 
 PatternPiece
-  = "*"              { return node("Wildcard", { wildcard: "*" }); }
-  / "?"              { return node("Wildcard", { wildcard: "?" }); }
-  / "\\" char:.      { return node("Escape",   { char }); }
-  / chars:$([^;:*?\\]+) { return node("Literal", { value: chars }); }
+  = "*"              { return node("Wildcard",   { wildcard: "*" }); }
+  / "?"              { return node("Wildcard",   { wildcard: "?" }); }
+  / CharClass
+  / "\\" char:.      { return node("Escape",     { char }); }
+  / chars:$([^;:*?\[\\]+) { return node("Literal", { value: chars }); }
+
+// Character class wildcard — [abc], [^abc], [!abc], [a-z], [a-zA-Z0-9], etc.
+// The spec string is stored verbatim (including any leading ^ or !).
+CharClass
+  = "[" spec:CharClassSpec "]" {
+      return node("CharClass", { spec });
+    }
+
+CharClassSpec
+  = s:$(("^" / "!")? CharClassMember+) { return s; }
+
+CharClassMember
+  = char:$([^\]\\]) "-" end:$([^\]\\]) { return char + "-" + end; }
+  / "\\" char:.                          { return "\\" + char; }
+  / $([^\]\\])
 
 
 // ============================================================================
@@ -629,6 +645,8 @@ SubCode
   / "]"  { return "]"; }
   / ","  { return ","; }
   / ";"  { return ";"; }
+  / "("  { return "("; }
+  / ")"  { return ")"; }
 
 
 // ============================================================================

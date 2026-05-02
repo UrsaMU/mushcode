@@ -111,6 +111,95 @@ export class EvalEngine implements IEvalEngine {
     return this;
   }
 
+  /**
+   * Shallow-evaluate a node: expand `[...]` eval-blocks and `%x` substitutions
+   * normally, but leave `{...}` braced strings as literal text (wrapping their
+   * raw content in braces without evaluating them).
+   *
+   * This matches TinyMUX @command dispatch semantics where the dispatcher sees
+   * `{...}` as unevaluated bodies it will re-evaluate later.
+   */
+  async evalShallow(node: ASTNode, ctx: EvalContext): Promise<string> {
+    // deno-lint-ignore no-explicit-any
+    const n = node as any;
+    switch (node.type) {
+      case "EvalBlock":
+        // Fully evaluate eval-block contents
+        return this.evalParts(n.parts as ASTNode[], ctx);
+      case "Substitution":
+        return this.evalSub(n.code as string, ctx);
+      case "SpecialVar":
+        return this.evalSpecialVar(n.code as string, ctx);
+      case "BracedString": {
+        // Preserve braces, output raw text of children without evaluating
+        const rawParts: string[] = [];
+        for (const part of (n.parts as ASTNode[])) {
+          rawParts.push(await this.shallowRaw(part));
+        }
+        return "{" + rawParts.join("") + "}";
+      }
+      case "Literal":
+        return n.value as string;
+      case "Escape":
+        return n.char as string;
+      case "TagRef":
+        return "#" + (n.name as string);
+      case "Text":
+      case "Arg":
+      case "Pattern":
+      case "UserCommand": {
+        // Shallow-evaluate each part
+        const chunks: string[] = [];
+        for (const part of (n.parts as ASTNode[])) {
+          chunks.push(await this.evalShallow(part, ctx));
+        }
+        return chunks.join("");
+      }
+      default:
+        return "";
+    }
+  }
+
+  /** Render a node as raw text without any evaluation (used inside BracedString). */
+  private async shallowRaw(node: ASTNode): Promise<string> {
+    // deno-lint-ignore no-explicit-any
+    const n = node as any;
+    switch (node.type) {
+      case "Literal":  return n.value as string;
+      case "Escape":   return n.char  as string;
+      case "BracedString": {
+        const inner: string[] = [];
+        for (const p of (n.parts as ASTNode[])) inner.push(await this.shallowRaw(p));
+        return "{" + inner.join("") + "}";
+      }
+      case "EvalBlock": {
+        const inner: string[] = [];
+        for (const p of (n.parts as ASTNode[])) inner.push(await this.shallowRaw(p));
+        return "[" + inner.join("") + "]";
+      }
+      case "Substitution": return "%" + (n.code as string);
+      case "SpecialVar":   return n.code as string;
+      case "FunctionCall": {
+        // render as name(raw args...)
+        const argStrs: string[] = [];
+        for (const arg of (n.args as ASTNode[])) {
+          const parts: string[] = [];
+          for (const p of ((arg as any).parts as ASTNode[])) parts.push(await this.shallowRaw(p));
+          argStrs.push(parts.join(""));
+        }
+        return (n.name as string) + "(" + argStrs.join(",") + ")";
+      }
+      default: {
+        if ((n as any).parts) {
+          const chunks: string[] = [];
+          for (const p of ((n as any).parts as ASTNode[])) chunks.push(await this.shallowRaw(p));
+          return chunks.join("");
+        }
+        return "";
+      }
+    }
+  }
+
   /** Parse and evaluate a raw softcode string. */
   async evalString(source: string, ctx: EvalContext): Promise<string> {
     const ast = parse(source, "Start");
@@ -155,6 +244,10 @@ export class EvalEngine implements IEvalEngine {
       case "AttributeSet":
         await this.exec(node, ctx);
         return "";
+
+      // ── Pattern pieces — return their printed form ────────────────────────
+      case "Wildcard":     return (n.wildcard as string);
+      case "CharClass":    return "[" + (n.spec as string) + "]";
 
       // ── Patterns — produce their printed form; registration is host work ─
       case "DollarPattern":
@@ -273,6 +366,8 @@ export class EvalEngine implements IEvalEngine {
     if (code === "t" || code === "T")   return "\t";
     if (code === "b" || code === "B")   return " ";
     if (code === "%")                   return "%";
+    if (code === "(")                   return "(";
+    if (code === ")")                   return ")";
     if (code === "[")                   return "[";
     if (code === "]")                   return "]";
     if (code === ",")                   return ",";
@@ -292,6 +387,40 @@ export class EvalEngine implements IEvalEngine {
     if (code.startsWith("="))           return (await this.accessor.getAttr(ctx.enactor, code.slice(1))) ?? "";
     // ANSI codes — pass through as-is for the host to render
     if (/^[xXcC]/.test(code))          return `%${code}`;
+    // Pronouns — resolved from enactor's SEX attribute by the host
+    if (code === "s" || code === "S" || code === "o" || code === "O" ||
+        code === "p" || code === "P" || code === "a" || code === "A") {
+      if (this.accessor.getPronoun) {
+        return (await this.accessor.getPronoun(ctx.enactor, code.toLowerCase())) ?? "";
+      }
+      return "";
+    }
+    // Moniker / decorated name — falls back to plain name if not available
+    if (code === "k") {
+      if (this.accessor.getMoniker) {
+        const moniker = await this.accessor.getMoniker(ctx.enactor);
+        if (moniker != null) return moniker;
+      }
+      return (await this.accessor.getName(ctx.enactor)).toLowerCase();
+    }
+    if (code === "K") {
+      if (this.accessor.getMoniker) {
+        const moniker = await this.accessor.getMoniker(ctx.enactor);
+        if (moniker != null) {
+          return moniker.charAt(0).toUpperCase() + moniker.slice(1);
+        }
+      }
+      const name = await this.accessor.getName(ctx.enactor);
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    }
+    // Command context codes — host provides via ctx.commandContext
+    if (code === "w")  return ctx.commandContext?.lastCommand?.toLowerCase() ?? "";
+    if (code === "W")  return ctx.commandContext?.lastCommand?.toUpperCase() ?? "";
+    if (code === "|")  return ctx.commandContext?.pipedOutput ?? "";
+    // Variable attributes %va–%vz and %VA–%VZ — read attribute VA–VZ from executor
+    if (/^v[a-z]$/i.test(code)) {
+      return (await this.accessor.getAttr(ctx.executor, "V" + code[1].toUpperCase())) ?? "";
+    }
     return "";
   }
 
