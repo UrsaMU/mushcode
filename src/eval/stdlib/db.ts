@@ -256,4 +256,57 @@ export const dbFunctions: Record<string, FunctionImpl> = {
       return result;
     },
   },
+
+  lattr: {
+    minArgs: 1, maxArgs: 2,
+    async exec(args, ctx, engine) {
+      const [objExpr, pattern] = args as string[];
+      if (!engine.accessor.listAttrs) return "";
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, objExpr);
+      if (!objId) return "";
+      const names = await engine.accessor.listAttrs(objId, pattern || undefined);
+      return names.join(" ");
+    },
+  },
+
+  xget: {
+    minArgs: 2, maxArgs: 2,
+    async exec(args, ctx, engine) {
+      const [objExpr, attrName] = args as string[];
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, objExpr);
+      if (!objId) return "#-1 NO MATCH";
+      const val = await engine.accessor.getAttr(objId, attrName.toUpperCase());
+      if (val === null) return "";
+      return engine.evalString(val, ctx);
+    },
+  },
+
+  obj: {
+    minArgs: 1, maxArgs: 1,
+    async exec(args, ctx, engine) {
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, (args as string[])[0]);
+      return objId ?? "#-1 NO MATCH";
+    },
+  },
+
+  type: {
+    minArgs: 1, maxArgs: 1,
+    async exec(args, ctx, engine) {
+      if (!engine.accessor.getType) return "#-1 NO MATCH";
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, (args as string[])[0]);
+      if (!objId) return "#-1 NO MATCH";
+      return engine.accessor.getType(objId);
+    },
+  },
+
+  objeval: {
+    minArgs: 2, maxArgs: 2,
+    async exec(args, ctx, engine) {
+      const [objExpr, expr] = args as string[];
+      const objId = await engine.accessor.resolveTarget(ctx.enactor, objExpr);
+      if (!objId) return "#-1 NO MATCH";
+      const subCtx = childIsolated(ctx, { executor: objId, caller: ctx.executor, registers: new Map() });
+      return engine.evalString(expr, subCtx);
+    },
+  },
 };

@@ -176,6 +176,12 @@ export interface ObjectAccessor {
   getParentChain?(id: string): Promise<string[]> | string[];
   /** Partial-name player lookup. Returns dbref string, null (no match), or "#-2 MULTIPLE MATCHES". */
   findPlayer?(partial: string): Promise<string | null> | string | null;
+  /** List attribute names on an object, optionally filtered by wildcard pattern. */
+  listAttrs?(objectId: string, pattern?: string): Promise<string[]> | string[];
+  /** Return the type of an object: "ROOM" | "PLAYER" | "THING" | "EXIT". */
+  getType?(objectId: string): Promise<string> | string;
+  /** Resolve a name/dbref expression to an object ID. */
+  findObject?(from: string, expr: string): Promise<string | null> | string | null;
 }
 
 // ── Function and command registrations ───────────────────────────────────────

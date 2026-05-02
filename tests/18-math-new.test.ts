@@ -366,3 +366,141 @@ describe("new math — vectors", () => {
     assertEquals(await ev("[vcross(1 0,0 1)]"), "#-1 #-1");
   });
 });
+
+// ── div() ─────────────────────────────────────────────────────────────────────
+
+describe("math — div()", () => {
+  it("div(x,0) → #-1 DIVIDE BY ZERO",
+    async () => assertEquals(await ev("[div(1,0)]"), "#-1 DIVIDE BY ZERO"));
+
+  it("div(0,5) → 0",
+    async () => assertEquals(await ev("[div(0,5)]"), "0"));
+
+  it("div(7,2) truncates toward zero (integers)",
+    async () => assertEquals(await ev("[div(7,2)]"), "3"));
+
+  it("div(-7,2) truncates toward zero",
+    async () => assertEquals(await ev("[div(-7,2)]"), "-3"));
+
+  it("div by 0.0 also → DIVIDE BY ZERO",
+    async () => assertEquals(await ev("[div(1,0.0)]"), "#-1 DIVIDE BY ZERO"));
+});
+
+// ── mod() ─────────────────────────────────────────────────────────────────────
+
+describe("math — mod()", () => {
+  it("mod(7,3) = 1",
+    async () => assertEquals(await ev("[mod(7,3)]"), "1"));
+
+  it("mod(x,0) → DIVIDE BY ZERO",
+    async () => assertEquals(await ev("[mod(5,0)]"), "#-1 DIVIDE BY ZERO"));
+
+  it("mod(-7,3) = -1 (JS semantics, sign follows dividend)",
+    async () => assertEquals(await ev("[mod(-7,3)]"), "-1"));
+
+  it("mod(0,5) = 0",
+    async () => assertEquals(await ev("[mod(0,5)]"), "0"));
+});
+
+// ── sqrt() ────────────────────────────────────────────────────────────────────
+
+describe("math — sqrt()", () => {
+  it("sqrt(0) = 0",
+    async () => assertEquals(await ev("[sqrt(0)]"), "0"));
+
+  it("sqrt(9) = 3",
+    async () => assertEquals(await ev("[sqrt(9)]"), "3"));
+
+  it("sqrt(-1) → ARGUMENT OUT OF RANGE",
+    async () => assertEquals(await ev("[sqrt(-1)]"), "#-1 ARGUMENT OUT OF RANGE"));
+
+  it("sqrt(2) ≈ 1.41421 (6 sig digits)",
+    async () => assertEquals(await ev("[sqrt(2)]"), "1.41421"));
+});
+
+// ── abs() ─────────────────────────────────────────────────────────────────────
+
+describe("math — abs()", () => {
+  it("abs(-0) = 0",
+    async () => assertEquals(await ev("[abs(-0)]"), "0"));
+
+  it("abs(0) = 0",
+    async () => assertEquals(await ev("[abs(0)]"), "0"));
+
+  it("abs(-100) = 100",
+    async () => assertEquals(await ev("[abs(-100)]"), "100"));
+});
+
+// ── power() ───────────────────────────────────────────────────────────────────
+
+describe("math — power()", () => {
+  it("power(0,0) = 1",
+    async () => assertEquals(await ev("[power(0,0)]"), "1"));
+
+  it("power(2,0) = 1",
+    async () => assertEquals(await ev("[power(2,0)]"), "1"));
+
+  it("power(0,5) = 0",
+    async () => assertEquals(await ev("[power(0,5)]"), "0"));
+
+  it("power(2,-1) = 0.5",
+    async () => assertEquals(await ev("[power(2,-1)]"), "0.5"));
+});
+
+// ── round() ───────────────────────────────────────────────────────────────────
+
+describe("math — round()", () => {
+  it("round(2.5,0) = 3 (rounds half up)",
+    async () => assertEquals(await ev("[round(2.5,0)]"), "3"));
+
+  it("round(2.55,1) = 2.6",
+    async () => assertEquals(await ev("[round(2.55,1)]"), "2.6"));
+
+  it("round with negative precision clamps to 0",
+    async () => assertEquals(await ev("[round(2.7,-1)]"), "3"));
+});
+
+// ── min() / max() ─────────────────────────────────────────────────────────────
+
+describe("math — min() / max()", () => {
+  it("min of single pair",
+    async () => assertEquals(await ev("[min(5,10)]"), "5"));
+
+  it("max of single pair",
+    async () => assertEquals(await ev("[max(5,10)]"), "10"));
+
+  it("min with negative numbers",
+    async () => assertEquals(await ev("[min(-5,-10)]"), "-10"));
+
+  it("max with all equal = that value",
+    async () => assertEquals(await ev("[max(3,3,3)]"), "3"));
+});
+
+// ── non-number args ───────────────────────────────────────────────────────────
+
+describe("math — non-number argument errors", () => {
+  it("add(x,1) → ARGUMENT IS NOT A NUMBER",
+    async () => assertEquals(await ev("[add(x,1)]"), "#-1 ARGUMENT (X) IS NOT A NUMBER"));
+
+  it("sub(a,b) → error",
+    async () => assertEquals(await ev("[sub(a,b)]"), "#-1 ARGUMENT (A) IS NOT A NUMBER"));
+
+  it("mul(1,x) → error (second arg)",
+    async () => assertEquals(await ev("[mul(1,x)]"), "#-1 ARGUMENT (X) IS NOT A NUMBER"));
+});
+
+// ── argument count boundaries ─────────────────────────────────────────────────
+
+describe("math — argument count boundaries", () => {
+  it("add requires at least 2 args",
+    async () => assertEquals(await ev("[add(1)]"), "#-1 FUNCTION (add) REQUIRES AT LEAST 2 ARGUMENT(S)"));
+
+  it("sub requires exactly 2: too many → error",
+    async () => assertEquals(await ev("[sub(1,2,3)]"), "#-1 FUNCTION (sub) TAKES AT MOST 2 ARGUMENT(S)"));
+
+  it("div requires exactly 2: too many → error",
+    async () => assertEquals(await ev("[div(1,2,3)]"), "#-1 FUNCTION (div) TAKES AT MOST 2 ARGUMENT(S)"));
+
+  it("sqrt requires exactly 1: too many → error",
+    async () => assertEquals(await ev("[sqrt(4,2)]"), "#-1 FUNCTION (sqrt) TAKES AT MOST 1 ARGUMENT(S)"));
+});

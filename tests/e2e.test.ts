@@ -414,3 +414,211 @@ describe("e2e — mixed literal + eval", () => {
   it("empty source → empty",        async () => assertEquals(await ev(""),                       ""));
   it("plain literal unchanged",     async () => assertEquals(await ev("hello world"),            "hello world"));
 });
+
+// ── Additional e2e tests (from tdd-audit, self-contained fixture) ─────────────
+
+const auditAttrs: Record<string, Record<string, string>> = {
+  player: {
+    NAME:     "Player",
+    LEVEL:    "5",
+    FN_GREET: "Hello, %0!",
+    FN_ADD:   "[add(%0,%1)]",
+    FN_SUM:   "[add(%0,[add(%1,%2)])]",
+    FN_DEEP:  "[u(me/FN_ADD,%0,%1)]",
+  },
+};
+
+const auditAccessor: ObjectAccessor = {
+  getAttr(id, attr) {
+    return Promise.resolve(auditAttrs[id]?.[attr.toUpperCase()] ?? null);
+  },
+  resolveTarget(_from, expr) {
+    if (expr === "me" || expr === "player") return Promise.resolve("player");
+    return Promise.resolve(null);
+  },
+  getName(id) {
+    if (id === "player") return Promise.resolve("Player");
+    return Promise.resolve(id);
+  },
+  hasFlag(_id, _flag) { return Promise.resolve(false); },
+};
+
+function makeAuditEngine(): EvalEngine {
+  const e = new EvalEngine(auditAccessor);
+  registerStdlib(e);
+  return e;
+}
+
+function auditCtx(overrides: Partial<EvalContext> = {}): EvalContext {
+  return makeContext({ enactor: "player", executor: "player", ...overrides });
+}
+
+function evA(src: string, overrides: Partial<EvalContext> = {}): Promise<string> {
+  return makeAuditEngine().evalString(src, auditCtx(overrides));
+}
+
+describe("e2e — basic eval pipeline", () => {
+  it("plain text passes through unchanged",
+    async () => assertEquals(await evA("hello world"), "hello world"));
+
+  it("simple function call",
+    async () => assertEquals(await evA("[add(1,2)]"), "3"));
+
+  it("function call embedded in text",
+    async () => assertEquals(await evA("Result: [add(3,4)]!"), "Result: 7!"));
+
+  it("two function calls concatenated",
+    async () => assertEquals(await evA("[add(1,2)][mul(3,4)]"), "312"));
+
+  it("substitution + function",
+    async () => assertEquals(await evA("[strlen(%N)]"), "6")); // "Player" = 6 chars
+});
+
+describe("e2e — nested function calls", () => {
+  it("2 levels deep: [add([add(1,2)],3)] = 6",
+    async () => assertEquals(await evA("[add([add(1,2)],3)]"), "6"));
+
+  it("3 levels deep: [add([add([add(1,1)],1)],1)] = 4",
+    async () => assertEquals(await evA("[add([add([add(1,1)],1)],1)]"), "4"));
+
+  it("nested comparisons: [gt([add(2,3)],4)] = 1",
+    async () => assertEquals(await evA("[gt([add(2,3)],4)]"), "1"));
+
+  it("nested string ops: [ucstr([left(hello,3)])] = HEL",
+    async () => assertEquals(await evA("[ucstr([left(hello,3)])]"), "HEL"));
+});
+
+describe("e2e — register setq + %q substitution", () => {
+  it("%q0 substitution after setq",
+    async () => assertEquals(await evA("[setq(0,hello)]%q0"), "hello"));
+
+  it("setq mid-expression, then use later in same string",
+    async () => assertEquals(await evA("a[setq(x,42)]b[r(x)]c"), "ab42c"));
+
+  it("registers persist across multiple function calls in same string",
+    async () => assertEquals(
+      await evA("[setq(a,3)][setq(b,4)][add([r(a)],[r(b)])]"),
+      "7",
+    ));
+
+  it("overwrite register",
+    async () => assertEquals(await evA("[setq(0,first)][setq(0,second)]%q0"), "second"));
+});
+
+describe("e2e — iter() nesting and ## scoping", () => {
+  it("iter basic",
+    async () => assertEquals(await evA("[iter(a b c,##)]"), "a b c"));
+
+  it("nested iter: inner ## is inner item",
+    async () => assertEquals(
+      await evA("[iter(a b,[iter(1 2,##)])]"),
+      "1 2 1 2",
+    ));
+
+  it("nested iter: outer ## via %i1 in inner",
+    async () => assertEquals(
+      await evA("[iter(x y,[iter(1 2,%i1)])]"),
+      "x x y y",
+    ));
+
+  it("deeply nested iter: %i2 from 3 levels out",
+    async () => assertEquals(
+      await evA("[iter(A B,[iter(x y,[iter(1 2,%i2)])])]"),
+      "A A A A B B B B",
+    ));
+
+  it("iter with setq inside body — register persists outside",
+    async () => {
+      const result = await evA("[iter(a b c,[setq(0,##)])][r(0)]");
+      assertEquals(result.endsWith("c"), true);
+    });
+
+  it("iter index #@ 1-based",
+    async () => assertEquals(await evA("[iter(a b c,#@)]"), "1 2 3"));
+});
+
+describe("e2e — u() function calls", () => {
+  it("u() basic call",
+    async () => assertEquals(await evA("[u(me/FN_GREET,World)]"), "Hello, World!"));
+
+  it("u() with math",
+    async () => assertEquals(await evA("[u(me/FN_ADD,5,7)]"), "12"));
+
+  it("u() two levels deep",
+    async () => assertEquals(await evA("[u(me/FN_DEEP,3,4)]"), "7"));
+
+  it("u() child registers don't leak to parent",
+    async () => {
+      const result = await evA("[setq(0,outer)][u(me/FN_ADD,1,2)][r(0)]");
+      assertEquals(result, "3outer");
+    });
+
+  it("u() args accessible as %0 %1 %2 in called attr",
+    async () => assertEquals(await evA("[u(me/FN_SUM,1,2,3)]"), "6"));
+});
+
+describe("e2e — conditional evaluation", () => {
+  it("if true branch",
+    async () => assertEquals(await evA("[if(1,yes,no)]"), "yes"));
+
+  it("if false branch",
+    async () => assertEquals(await evA("[if(0,yes,no)]"), "no"));
+
+  it("if with computed condition",
+    async () => assertEquals(await evA("[if([gt([strlen(hello)],3)],long,short)]"), "long"));
+
+  it("switch finds match",
+    async () => assertEquals(await evA("[switch(b,a,first,b,second,default)]"), "second"));
+
+  it("nested if/switch",
+    async () => assertEquals(
+      await evA("[if([eq(1,1)],[switch(x,x,found,nope)],no)]"),
+      "found",
+    ));
+});
+
+describe("e2e — error propagation", () => {
+  it("math error embeds in surrounding text",
+    async () => assertEquals(await evA("val=[div(1,0)]"), "val=#-1 DIVIDE BY ZERO"));
+
+  it("unknown function error",
+    async () => assertEquals(await evA("[nope(1,2)]"), "#-1 FUNCTION (nope) NOT FOUND"));
+
+  it("too few args error",
+    async () => assertEquals(await evA("[add(1)]"), "#-1 FUNCTION (add) REQUIRES AT LEAST 2 ARGUMENT(S)"));
+
+  it("depth exceeded propagates correctly",
+    async () => {
+      const engine = makeAuditEngine();
+      const c = auditCtx({ depth: 101, maxDepth: 100 });
+      assertEquals(await engine.evalString("[add(1,2)]", c), "#-1 EVALUATION DEPTH EXCEEDED");
+    });
+});
+
+describe("e2e — escape sequences and literals", () => {
+  it("escaped [ is literal",
+    async () => assertEquals(await evA("%[hello%]"), "[hello]"));
+
+  it("escaped %% = %",
+    async () => assertEquals(await evA("100%%"), "100%"));
+
+  it("escaped %r in text produces CRLF",
+    async () => assertEquals(await evA("line1%rline2"), "line1\r\nline2"));
+
+  it("escaped comma in arg via %,",
+    async () => assertEquals(await evA("[strlen(%,)]"), "1"));
+});
+
+describe("e2e — DB function integration", () => {
+  it("get(me/LEVEL) = 5",
+    async () => assertEquals(await evA("[get(me/LEVEL)]"), "5"));
+
+  it("hasattr → conditional",
+    async () => assertEquals(await evA("[if([hasattr(me,LEVEL)],has_level,no)]"), "has_level"));
+
+  it("name used in string",
+    async () => assertEquals(await evA("Hello [name(me)]!"), "Hello Player!"));
+
+  it("get unset attr = empty, used in math → 1 (empty coerces to 0)",
+    async () => assertEquals(await evA("[add([get(me/NOPE)],1)]"), "1"));
+});

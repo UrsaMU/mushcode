@@ -329,3 +329,167 @@ describe("string — s", () => {
 describe("string — lit", () => {
   it('returns arg as-is', async () => assertEquals(await ev("[lit(hello)]"), "hello"));
 });
+
+// ── strlen() edge cases ───────────────────────────────────────────────────────
+
+describe("string — strlen()", () => {
+  it("strlen of empty string = 0",
+    async () => assertEquals(await ev("[strlen()]"), "#-1 FUNCTION (strlen) REQUIRES AT LEAST 1 ARGUMENT(S)"));
+
+  it("strlen passes through with explicit empty arg (parser gives 1 empty arg)",
+    async () => assertEquals(await ev("[strlen( )]"), "1")); // single space
+
+  it("strlen of unicode char counts as 1",
+    async () => assertEquals(await ev("[strlen(abc)]"), "3"));
+});
+
+// ── mid() edge cases ──────────────────────────────────────────────────────────
+
+describe("string — mid()", () => {
+  it("mid negative start clamps to 0",
+    async () => assertEquals(await ev("[mid(hello,-5,3)]"), "hel"));
+
+  it("mid start past end = empty",
+    async () => assertEquals(await ev("[mid(hello,100,3)]"), ""));
+
+  it("mid with length 0 = empty",
+    async () => assertEquals(await ev("[mid(hello,0,0)]"), ""));
+
+  it("mid with length larger than remaining = rest of string",
+    async () => assertEquals(await ev("[mid(hello,3,999)]"), "lo"));
+
+  it("mid non-number start → error",
+    async () => assertEquals(await ev("[mid(hello,x,2)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+
+  it("mid non-number length → error",
+    async () => assertEquals(await ev("[mid(hello,1,y)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+});
+
+// ── left() / right() edge cases ──────────────────────────────────────────────
+
+describe("string — left() / right()", () => {
+  it("left(str,0) = empty",
+    async () => assertEquals(await ev("[left(hello,0)]"), ""));
+
+  it("left with count larger than string = full string",
+    async () => assertEquals(await ev("[left(hi,100)]"), "hi"));
+
+  it("right(str,0) = empty",
+    async () => assertEquals(await ev("[right(hello,0)]"), ""));
+
+  it("right with count larger than string = full string",
+    async () => assertEquals(await ev("[right(hi,100)]"), "hi"));
+
+  it("left non-number → error",
+    async () => assertEquals(await ev("[left(hello,x)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+
+  it("right non-number → error",
+    async () => assertEquals(await ev("[right(hello,x)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+});
+
+// ── trim() variants ───────────────────────────────────────────────────────────
+
+describe("string — trim()", () => {
+  it("trim default (both sides)",
+    async () => assertEquals(await ev("[trim( hello )]"), "hello"));
+
+  it("trim left side only",
+    async () => assertEquals(await ev("[trim( hello ,l)]"), "hello "));
+
+  it("trim right side only",
+    async () => assertEquals(await ev("[trim( hello ,r)]"), " hello"));
+
+  it("trim custom char from both sides",
+    async () => assertEquals(await ev("[trim(xxhixx,b,x)]"), "hi"));
+
+  it("trim already clean string = unchanged",
+    async () => assertEquals(await ev("[trim(hello)]"), "hello"));
+
+  it("trim empty string = empty",
+    async () => assertEquals(await ev("[trim( )]"), ""));
+});
+
+// ── ljust() / rjust() / center() edge cases ──────────────────────────────────
+
+describe("string — padding functions", () => {
+  it("ljust: string longer than width = unchanged",
+    async () => assertEquals(await ev("[ljust(hello,3)]"), "hello"));
+
+  it("rjust: string longer than width = unchanged",
+    async () => assertEquals(await ev("[rjust(hello,3)]"), "hello"));
+
+  it("center: string longer than width = unchanged",
+    async () => assertEquals(await ev("[center(hello,3)]"), "hello"));
+
+  it("ljust with custom fill char",
+    async () => assertEquals(await ev("[ljust(hi,5,*)]"), "hi***"));
+
+  it("rjust with custom fill char",
+    async () => assertEquals(await ev("[rjust(hi,5,*)]"), "***hi"));
+
+  it("center odd padding: extra space on right",
+    async () => assertEquals(await ev("[center(hi,5)]"), " hi  "));
+
+  it("center even padding",
+    async () => assertEquals(await ev("[center(hi,6)]"), "  hi  "));
+
+  it("ljust non-number width → error",
+    async () => assertEquals(await ev("[ljust(hi,x)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+
+  it("center non-number width → error",
+    async () => assertEquals(await ev("[center(hi,x)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+});
+
+// ── ucstr / lcstr / capstr edge cases ────────────────────────────────────────
+
+describe("string — case functions", () => {
+  it("ucstr empty string = error",
+    async () => assertEquals(await ev("[ucstr()]"), "#-1 FUNCTION (ucstr) REQUIRES AT LEAST 1 ARGUMENT(S)"));
+
+  it("lcstr already lower = unchanged",
+    async () => assertEquals(await ev("[lcstr(hello)]"), "hello"));
+
+  it("capstr empty string = error",
+    async () => assertEquals(await ev("[capstr()]"), "#-1 FUNCTION (capstr) REQUIRES AT LEAST 1 ARGUMENT(S)"));
+
+  it("capstr single char",
+    async () => assertEquals(await ev("[capstr(a)]"), "A"));
+
+  it("capstr only capitalises first char",
+    async () => assertEquals(await ev("[capstr(hELLO)]"), "HELLO"));
+});
+
+// ── cat() edge cases ──────────────────────────────────────────────────────────
+
+describe("string — cat()", () => {
+  it("cat two words joins with space",
+    async () => assertEquals(await ev("[cat(a,b)]"), "a b"));
+
+  it("cat three words",
+    async () => assertEquals(await ev("[cat(a,b,c)]"), "a b c"));
+
+  it("cat requires at least 2 args",
+    async () => assertEquals(await ev("[cat(a)]"), "#-1 FUNCTION (cat) REQUIRES AT LEAST 2 ARGUMENT(S)"));
+});
+
+// ── space() / repeat() edge cases ────────────────────────────────────────────
+
+describe("string — space() / repeat()", () => {
+  it("space(0) = empty",
+    async () => assertEquals(await ev("[space(0)]"), ""));
+
+  it("space(3) = '   '",
+    async () => assertEquals(await ev("[space(3)]"), "   "));
+
+  it("repeat(str,0) = empty",
+    async () => assertEquals(await ev("[repeat(ab,0)]"), ""));
+
+  it("repeat(str,1) = str",
+    async () => assertEquals(await ev("[repeat(hi,1)]"), "hi"));
+
+  it("space with huge n → OUTPUT TOO LONG",
+    async () => assertEquals(await ev("[space(50000)]"), "#-1 OUTPUT TOO LONG"));
+
+  it("repeat with huge n → OUTPUT TOO LONG",
+    async () => assertEquals(await ev("[repeat(A,50000)]"), "#-1 OUTPUT TOO LONG"));
+});

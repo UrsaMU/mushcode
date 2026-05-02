@@ -197,3 +197,128 @@ describe("list — lrest", () => {
   it("lrest single word → ''", async () =>
     assertEquals(await ev("[lrest(a)]"), ""));
 });
+
+// ── iter() edge cases ─────────────────────────────────────────────────────────
+
+describe("list — iter()", () => {
+  it("iter empty list returns empty string",
+    async () => assertEquals(await ev("[iter(,body)]"), ""));
+
+  it("iter single item",
+    async () => assertEquals(await ev("[iter(a,##)]"), "a"));
+
+  it("iter three items with body",
+    async () => assertEquals(await ev("[iter(a b c,##!)]"), "a! b! c!"));
+
+  it("iter index ##@ 1-based",
+    async () => assertEquals(await ev("[iter(a b c,#@)]"), "1 2 3"));
+
+  it("iter custom input delimiter",
+    async () => assertEquals(await ev("[iter(a|b|c,##,|)]"), "a b c"));
+
+  it("iter custom output delimiter",
+    async () => assertEquals(await ev("[iter(a|b,##,|,.)]"), "a.b"));
+
+  it("iter nested: inner ## scoped to inner iter",
+    async () => assertEquals(await ev("[iter(a b,[iter(1 2,##)])]"), "1 2 1 2"));
+
+  it("iter nested: outer ## accessible via %i1",
+    async () => assertEquals(await ev("[iter(x y,[iter(1 2,%i1)])]"), "x x y y"));
+
+  it("iter %i0 = ## (current frame)",
+    async () => assertEquals(await ev("[iter(z,%i0)]"), "z"));
+
+  it("iter with whitespace-only list = empty",
+    async () => assertEquals(await ev("[iter(   ,##)]"), ""));
+
+  it("iter multiple spaces between items collapses (space delimiter)",
+    async () => assertEquals(await ev("[iter(a  b  c,##)]"), "a b c"));
+});
+
+// ── words() edge cases ────────────────────────────────────────────────────────
+
+describe("list — words()", () => {
+  it("words on empty string = error",
+    async () => assertEquals(await ev("[words()]"), "#-1 FUNCTION (words) REQUIRES AT LEAST 1 ARGUMENT(S)"));
+
+  it("words single word = 1",
+    async () => assertEquals(await ev("[words(hello)]"), "1"));
+
+  it("words multiple spaces collapses",
+    async () => assertEquals(await ev("[words(a  b  c)]"), "3"));
+
+  it("words with custom delimiter",
+    async () => assertEquals(await ev("[words(a|b|c,|)]"), "3"));
+
+  it("words: custom delim, consecutive delimiters count as empty items",
+    async () => assertEquals(await ev("[words(a||c,|)]"), "3"));
+});
+
+// ── word() edge cases ─────────────────────────────────────────────────────────
+
+describe("list — word()", () => {
+  it("word(str,1) = first word",
+    async () => assertEquals(await ev("[word(a b c,1)]"), "a"));
+
+  it("word(str,3) = third word",
+    async () => assertEquals(await ev("[word(a b c,3)]"), "c"));
+
+  it("word out of range = empty string",
+    async () => assertEquals(await ev("[word(a b c,9)]"), ""));
+
+  it("word with n=0 → error (must be ≥ 1)",
+    async () => assertEquals(await ev("[word(a b c,0)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+
+  it("word with negative n → error",
+    async () => assertEquals(await ev("[word(a b c,-1)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+
+  it("word with custom delimiter",
+    async () => assertEquals(await ev("[word(a|b|c,2,|)]"), "b"));
+});
+
+// ── first() / last() / rest() edge cases ─────────────────────────────────────
+
+describe("list — first() / last() / rest()", () => {
+  it("first of space-delimited list",
+    async () => assertEquals(await ev("[first(a b c)]"), "a"));
+
+  it("first of single item",
+    async () => assertEquals(await ev("[first(x)]"), "x"));
+
+  it("first of empty string = error",
+    async () => assertEquals(await ev("[first()]"), "#-1 FUNCTION (first) REQUIRES AT LEAST 1 ARGUMENT(S)"));
+
+  it("last of space-delimited list",
+    async () => assertEquals(await ev("[last(a b c)]"), "c"));
+
+  it("last of single item",
+    async () => assertEquals(await ev("[last(x)]"), "x"));
+
+  it("rest of list = everything after first item",
+    async () => assertEquals(await ev("[rest(a b c)]"), "b c"));
+
+  it("rest of single item = empty string",
+    async () => assertEquals(await ev("[rest(a)]"), ""));
+
+  it("rest with custom delimiter",
+    async () => assertEquals(await ev("[rest(a|b|c,|)]"), "b|c"));
+
+  it("first with custom delimiter",
+    async () => assertEquals(await ev("[first(a|b|c,|)]"), "a"));
+
+  it("last with custom delimiter",
+    async () => assertEquals(await ev("[last(a|b|c,|)]"), "c"));
+});
+
+// ── #@ index inside iter ──────────────────────────────────────────────────────
+
+describe("list — iteration index #@", () => {
+  it("#@ starts at 1",
+    async () => assertEquals(await ev("[iter(x,#@)]"), "1"));
+
+  it("#@ increments per item",
+    async () => assertEquals(await ev("[iter(a b c,#@)]"), "1 2 3"));
+
+  it("#@ in nested iter = inner index",
+    async () => assertEquals(await ev("[iter(a b,[iter(x y,#@)])]"), "1 2 1 2"));
+});

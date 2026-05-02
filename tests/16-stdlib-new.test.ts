@@ -166,3 +166,180 @@ describe("map / filter (lazy)", () => {
   it("filter gt(##,2) keeps 3 4 5",    async () => assertEquals(await ev("[filter(1 2 3 4 5,gt(##,2))]"),   "3 4 5"));
   it("filter nothing passes → empty",  async () => assertEquals(await ev("[filter(1 2,gt(##,9))]"),          ""));
 });
+
+// ── Additional edge cases (from tdd-audit, richer accessor) ──────────────────
+
+const stdlibAuditAccessor: ObjectAccessor = {
+  getAttr(id, attr) {
+    const db: Record<string, Record<string, string>> = {
+      obj1: {
+        NAME:     "Alice",
+        SCORE:    "42",
+        FN_SELF:  "[u(me/FN_SELF,%0)]",
+        FN_ARGS:  "%0 %1 %2",
+      },
+      obj2: { NAME: "Bob", SCORE: "7" },
+    };
+    return Promise.resolve(db[id]?.[attr.toUpperCase()] ?? null);
+  },
+  resolveTarget(_from, expr) {
+    if (expr === "me" || expr === "obj1") return Promise.resolve("obj1");
+    if (expr === "obj2" || expr === "Bob") return Promise.resolve("obj2");
+    return Promise.resolve(null);
+  },
+  getName(id) {
+    if (id === "obj1") return Promise.resolve("Alice");
+    if (id === "obj2") return Promise.resolve("Bob");
+    return Promise.resolve(id);
+  },
+  hasFlag(id, flag) {
+    return Promise.resolve(id === "obj1" && flag === "wizard");
+  },
+};
+
+function makeStdlibAuditEngine(): EvalEngine {
+  const e = new EvalEngine(stdlibAuditAccessor);
+  registerStdlib(e);
+  return e;
+}
+
+function stdlibAuditCtx(overrides: Partial<EvalContext> = {}): EvalContext {
+  return makeContext({ enactor: "obj1", executor: "obj1", ...overrides });
+}
+
+function evS(src: string, overrides: Partial<EvalContext> = {}): Promise<string> {
+  return makeStdlibAuditEngine().evalString(src, stdlibAuditCtx(overrides));
+}
+
+describe("iter — words()", () => {
+  it("empty string = error",
+    async () => assertEquals(await evS("[words()]"), "#-1 FUNCTION (words) REQUIRES AT LEAST 1 ARGUMENT(S)"));
+
+  it("single word = 1",
+    async () => assertEquals(await evS("[words(hello)]"), "1"));
+
+  it("multiple spaces collapse (space delimiter)",
+    async () => assertEquals(await evS("[words(a  b  c)]"), "3"));
+
+  it("custom delimiter: pipe",
+    async () => assertEquals(await evS("[words(a|b|c,|)]"), "3"));
+
+  it("custom delimiter: consecutive → empty items count",
+    async () => assertEquals(await evS("[words(a||b,|)]"), "3"));
+});
+
+describe("iter — word()", () => {
+  it("word 1 = first",
+    async () => assertEquals(await evS("[word(a b c,1)]"), "a"));
+
+  it("word 2 = second",
+    async () => assertEquals(await evS("[word(a b c,2)]"), "b"));
+
+  it("word out of range = empty",
+    async () => assertEquals(await evS("[word(a b c,99)]"), ""));
+
+  it("word 0 → error (must be ≥ 1)",
+    async () => assertEquals(await evS("[word(a b c,0)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+
+  it("word negative → error",
+    async () => assertEquals(await evS("[word(a b c,-1)]"), "#-1 ARGUMENT IS NOT A NUMBER"));
+});
+
+describe("iter — first/last/rest", () => {
+  it("first from empty list = empty",
+    async () => assertEquals(await evS("[first( )]"), ""));
+
+  it("last from empty list = empty",
+    async () => assertEquals(await evS("[last( )]"), ""));
+
+  it("rest of two-item list = second item",
+    async () => assertEquals(await evS("[rest(a b)]"), "b"));
+
+  it("rest of three-item list",
+    async () => assertEquals(await evS("[rest(a b c)]"), "b c"));
+
+  it("first with custom delimiter",
+    async () => assertEquals(await evS("[first(x|y|z,|)]"), "x"));
+
+  it("last with custom delimiter",
+    async () => assertEquals(await evS("[last(x|y|z,|)]"), "z"));
+
+  it("rest with custom delimiter preserves delimiter in output",
+    async () => assertEquals(await evS("[rest(x|y|z,|)]"), "y|z"));
+});
+
+describe("db — get()", () => {
+  it("get existing attr returns value",
+    async () => assertEquals(await evS("[get(obj1/SCORE)]"), "42"));
+
+  it("get via 'me' alias",
+    async () => assertEquals(await evS("[get(me/NAME)]"), "Alice"));
+
+  it("get unset attr = empty",
+    async () => assertEquals(await evS("[get(me/NOPE)]"), ""));
+
+  it("get no-match target → #-1 NO MATCH",
+    async () => assertEquals(await evS("[get(zzz/SCORE)]"), "#-1 NO MATCH"));
+
+  it("get no slash → #-1 BAD ARGUMENT FORMAT",
+    async () => assertEquals(await evS("[get(justtext)]"), "#-1 BAD ARGUMENT FORMAT"));
+
+  it("get case-insensitive attr name",
+    async () => assertEquals(await evS("[get(me/name)]"), "Alice"));
+});
+
+describe("db — name()", () => {
+  it("name of known object",
+    async () => assertEquals(await evS("[name(obj1)]"), "Alice"));
+
+  it("name via 'me'",
+    async () => assertEquals(await evS("[name(me)]"), "Alice"));
+
+  it("name of unknown → #-1 NO MATCH",
+    async () => assertEquals(await evS("[name(zzz)]"), "#-1 NO MATCH"));
+});
+
+describe("db — hasattr()", () => {
+  it("hasattr present → 1",
+    async () => assertEquals(await evS("[hasattr(me,NAME)]"), "1"));
+
+  it("hasattr absent → 0",
+    async () => assertEquals(await evS("[hasattr(me,NOPE)]"), "0"));
+
+  it("hasattr case-insensitive",
+    async () => assertEquals(await evS("[hasattr(me,name)]"), "1"));
+
+  it("hasattr unknown object → 0",
+    async () => assertEquals(await evS("[hasattr(zzz,NAME)]"), "0"));
+});
+
+describe("db — hasflag()", () => {
+  it("hasflag present → 1",
+    async () => assertEquals(await evS("[hasflag(me,wizard)]"), "1"));
+
+  it("hasflag absent → 0",
+    async () => assertEquals(await evS("[hasflag(me,builder)]"), "0"));
+
+  it("hasflag unknown object → 0",
+    async () => assertEquals(await evS("[hasflag(zzz,wizard)]"), "0"));
+});
+
+describe("db — u()", () => {
+  it("u with positional args",
+    async () => assertEquals(await evS("[u(me/FN_ARGS,x,y,z)]"), "x y z"));
+
+  it("u no match target → #-1 NO MATCH",
+    async () => assertEquals(await evS("[u(zzz/FN_ARGS,1)]"), "#-1 NO MATCH"));
+
+  it("u missing attr → #-1 NO SUCH ATTRIBUTE",
+    async () => assertEquals(await evS("[u(me/NOPE)]"), "#-1 NO SUCH ATTRIBUTE"));
+
+  it("u infinite recursion hits depth limit",
+    async () => assertEquals(await evS("[u(me/FN_SELF,x)]"), "#-1 EVALUATION DEPTH EXCEEDED"));
+
+  it("u child registers do not leak to parent",
+    async () => {
+      const result = await evS("[setq(0,outer)][u(me/FN_ARGS,a,b)][r(0)]");
+      assertEquals(result, "a b outer");
+    });
+});

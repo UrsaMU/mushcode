@@ -285,3 +285,110 @@ describe("listq", () => {
   it("returns empty when no registers set",
     async () => assertEquals(await ev("[listq()]"), ""));
 });
+
+// ── MUX truthy semantics ──────────────────────────────────────────────────────
+
+describe("logic — MUX truthy semantics", () => {
+  // Only "" and "0" are false in TinyMUX
+  it("empty string is false (t() requires arg)",
+    async () => assertEquals(await ev("[t()]"), "#-1 FUNCTION (t) REQUIRES AT LEAST 1 ARGUMENT(S)"));
+
+  it("t(0) = 0",
+    async () => assertEquals(await ev("[t(0)]"), "0"));
+
+  it("t(1) = 1",
+    async () => assertEquals(await ev("[t(1)]"), "1"));
+
+  it("t(-1) = 1 (non-zero is truthy)",
+    async () => assertEquals(await ev("[t(-1)]"), "1"));
+
+  it("t(00) = 1 (string '00' is not '0')",
+    async () => assertEquals(await ev("[t(00)]"), "1"));
+
+  it("t(abc) = 1",
+    async () => assertEquals(await ev("[t(abc)]"), "1"));
+
+  it("not(0) = 1",
+    async () => assertEquals(await ev("[not(0)]"), "1"));
+
+  it("not(1) = 0",
+    async () => assertEquals(await ev("[not(1)]"), "0"));
+
+  it("not(abc) = 0 (truthy → not = 0)",
+    async () => assertEquals(await ev("[not(abc)]"), "0"));
+});
+
+// ── switch() exact-match semantics ────────────────────────────────────────────
+
+describe("logic — switch() exact match (no wildcards)", () => {
+  it("switch: 'a*' pattern does NOT match 'abc' (exact, no glob)",
+    async () => assertEquals(await ev("[switch(abc,a*,yes,nope)]"), "nope"));
+
+  it("switch: exact '0' matches '0' only",
+    async () => assertEquals(await ev("[switch(0,0,zero,one)]"), "zero"));
+
+  it("switch: '0' does NOT match '' (empty)",
+    async () => assertEquals(await ev("[switch(,0,zero,default)]"), "default"));
+
+  it("switch: first match wins",
+    async () => assertEquals(await ev("[switch(x,x,first,x,second)]"), "first"));
+
+  it("switch: only default (odd args → default)",
+    async () => assertEquals(await ev("[switch(a,b,match,fallback)]"), "fallback"));
+
+  it("switch: even args, no default, no match = empty",
+    async () => assertEquals(await ev("[switch(z,a,one,b,two)]"), ""));
+
+  it("switch: value with spaces matches exactly",
+    async () => assertEquals(await ev("[switch(hello world,hello world,yes,no)]"), "yes"));
+});
+
+// ── setq / r() register scoping ───────────────────────────────────────────────
+
+describe("logic — setq / r() register scoping", () => {
+  it("setq returns empty string",
+    async () => assertEquals(await ev("[setq(0,hello)]"), ""));
+
+  it("r() after setq returns stored value",
+    async () => assertEquals(await ev("[setq(x,42)][r(x)]"), "42"));
+
+  it("r() unset register = empty string",
+    async () => assertEquals(await ev("[r(unset_reg_xyz)]"), ""));
+
+  it("setq with named register (multi-char)",
+    async () => assertEquals(await ev("[setq(abc,test)][r(abc)]"), "test"));
+
+  it("setr(reg,val) stores AND returns val",
+    async () => assertEquals(await ev("[setr(0,ping)]"), "ping"));
+
+  it("setr visible via r() after call",
+    async () => assertEquals(await ev("[setr(r0,val)][r(r0)]"), "valval"));
+
+  it("%q shorthand reads register",
+    async () => assertEquals(await ev("[setq(k,hello)]%qk"), "hello"));
+
+  it("overwriting a register updates it",
+    async () => assertEquals(await ev("[setq(0,first)][setq(0,second)][r(0)]"), "second"));
+});
+
+// ── and() / or() return values ────────────────────────────────────────────────
+
+describe("logic — and() / or() return values are '1' or '0'", () => {
+  it("and true returns '1' (string)",
+    async () => assertEquals(await ev("[and(1,1)]"), "1"));
+
+  it("and false returns '0' (string)",
+    async () => assertEquals(await ev("[and(1,0)]"), "0"));
+
+  it("or true returns '1' (string)",
+    async () => assertEquals(await ev("[or(0,1)]"), "1"));
+
+  it("or false returns '0' (string)",
+    async () => assertEquals(await ev("[or(0,0)]"), "0"));
+
+  it("and short-circuit: third arg never evaluated when second is false",
+    async () => assertEquals(await ev("[and(1,0,[div(1,0)])]"), "0"));
+
+  it("or short-circuit: second arg never evaluated when first is true",
+    async () => assertEquals(await ev("[or(1,[div(1,0)])]"), "1"));
+});
